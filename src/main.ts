@@ -90,6 +90,7 @@ async function init(): Promise<void> {
     const app = $("#app");
     if (!app) throw new Error("缺少 #app 根节点");
     app.innerHTML = renderShell();
+    finishBoot();
     bindEvents();
     registerServiceWorker();
 
@@ -101,6 +102,7 @@ async function init(): Promise<void> {
     await renderRoute();
   } catch (error) {
     console.error(error);
+    finishBoot();
     const app = $("#app");
     if (app) {
       app.innerHTML = `
@@ -114,6 +116,10 @@ async function init(): Promise<void> {
       `;
     }
   }
+}
+
+function finishBoot(): void {
+  document.documentElement.classList.remove("boot-waiting");
 }
 
 async function refreshData(): Promise<void> {

@@ -1,6 +1,19 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
+test("刷新直达页面时不闪出启动文案", async ({ page }) => {
+  await page.route(/\/bistecca-tokyo\/assets\/index-.*\.js$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await route.continue();
+  });
+
+  const navigation = page.goto("#/library", { waitUntil: "commit" });
+  await page.waitForTimeout(120);
+  await expect(page.getByText("正在准备今日训练")).toBeHidden();
+  await navigation;
+  await expect(page.getByRole("heading", { name: "选一段听得懂的材料" })).toBeVisible();
+});
+
 test("今日训练首页可用且无严重可访问性问题", async ({ page }) => {
   await page.goto("#/today");
   await expect(page.getByRole("heading", { name: /看得懂/ })).toBeVisible();
