@@ -1,332 +1,227 @@
-const DB_NAME = "auralift-listening-v1";
-const DB_VERSION = 1;
-const STORE_NAMES = ["progress", "attempts", "mistakes", "vocabCards", "settings"];
-const MISTAKE_TYPES = ["连读", "弱读", "生词", "口音", "语速快", "熟词听不出"];
-const ROUTE_TABS = [
-  { id: "today", label: "今日", icon: "T", href: "#/today" },
-  { id: "library", label: "素材", icon: "L", href: "#/library" },
-  { id: "vocab", label: "词汇", icon: "V", href: "#/vocab" },
-  { id: "stats", label: "统计", icon: "S", href: "#/stats" },
-  { id: "settings", label: "设置", icon: "G", href: "#/settings" }
-];
+import { AudioEngine } from "./audio.js";
+import { MISTAKE_TYPES, ROUTES } from "./config.js";
+import { openListeningDb } from "./db.js";
+import {
+  $,
+  $$,
+  attr,
+  clamp,
+  downloadJson,
+  formatDuration,
+  html,
+  icon,
+  localDate,
+  normalizeWords,
+  readJsonFile,
+  slugify
+} from "./utils.js";
 
 const state = {
   lessons: [],
   db: null,
+  audio: new AudioEngine(),
   settings: null,
   snapshot: null,
-  lastRoute: null,
+  route: null,
+  previousRoute: null,
+  lastTab: "today",
   libraryFilter: "全部",
   sentenceIndex: {},
   revealByLesson: {},
   loopByLesson: {},
-  trainModeByLesson: {},
+  modeByLesson: {},
   dictationText: "",
   dictationResult: null,
   vocabIndex: 0,
   vocabRevealed: false,
-  lastTab: "today",
-  skipAnimation: false
+  suppressTransition: false
 };
-
-const $ = (selector, root = document) => root.querySelector(selector);
-const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
   try {
-    const [lessonPayload, db] = await Promise.all([
+    const [payload, db] = await Promise.all([
       fetch("data/lessons.json").then((response) => response.json()),
-      openDatabase()
+      openListeningDb()
     ]);
 
-    state.lessons = lessonPayload.lessons;
+    state.lessons = payload.lessons;
     state.db = db;
-    await seedDatabase();
-    await loadSettings();
+    await state.db.seed(state.lessons);
+    await refreshData();
+
     renderShell();
-    bindGlobalEvents();
+    bindEvents();
+    registerServiceWorker();
 
     if (!location.hash) {
       location.hash = "#/today";
       return;
     }
-
     await renderRoute();
   } catch (error) {
-    $("#app").innerHTML = `
-      <div class="boot-screen">
-        <div class="boot-mark">A</div>
-        <p>应用初始化失败。请通过本地服务或 GitHub Pages 打开，而不是直接双击 HTML。</p>
-      </div>
-    `;
     console.error(error);
+    $("#app").innerHTML = `
+      <main class="boot-screen">
+        <div class="boot-card">
+          <div class="brand-mark">A</div>
+          <h1>初始化失败</h1>
+          <p>请通过本地服务或 GitHub Pages 打开应用。直接双击 HTML 会阻止数据文件加载。</p>
+        </div>
+      </main>
+    `;
   }
 }
 
-function openDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains("progress")) {
-        db.createObjectStore("progress", { keyPath: "lessonId" });
-      }
-      if (!db.objectStoreNames.contains("attempts")) {
-        const store = db.createObjectStore("attempts", { keyPath: "id", autoIncrement: true });
-        store.createIndex("date", "date", { unique: false });
-        store.createIndex("lessonId", "lessonId", { unique: false });
-      }
-      if (!db.objectStoreNames.contains("mistakes")) {
-        const store = db.createObjectStore("mistakes", { keyPath: "id" });
-        store.createIndex("lessonId", "lessonId", { unique: false });
-        store.createIndex("sentenceId", "sentenceId", { unique: false });
-      }
-      if (!db.objectStoreNames.contains("vocabCards")) {
-        const store = db.createObjectStore("vocabCards", { keyPath: "id" });
-        store.createIndex("dueDate", "dueDate", { unique: false });
-      }
-      if (!db.objectStoreNames.contains("settings")) {
-        db.createObjectStore("settings", { keyPath: "key" });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function dbRequest(request) {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-const dbApi = {
-  get(storeName, key) {
-    const tx = state.db.transaction(storeName, "readonly");
-    return dbRequest(tx.objectStore(storeName).get(key));
-  },
-  getAll(storeName) {
-    const tx = state.db.transaction(storeName, "readonly");
-    return dbRequest(tx.objectStore(storeName).getAll());
-  },
-  put(storeName, value) {
-    const tx = state.db.transaction(storeName, "readwrite");
-    return dbRequest(tx.objectStore(storeName).put(value));
-  },
-  add(storeName, value) {
-    const tx = state.db.transaction(storeName, "readwrite");
-    return dbRequest(tx.objectStore(storeName).add(value));
-  },
-  delete(storeName, key) {
-    const tx = state.db.transaction(storeName, "readwrite");
-    return dbRequest(tx.objectStore(storeName).delete(key));
-  }
-};
-
-async function seedDatabase() {
-  const existingSettings = await dbApi.get("settings", "user");
-  if (!existingSettings) {
-    await dbApi.put("settings", {
-      key: "user",
-      dailyGoalMinutes: 45,
-      defaultRate: 1,
-      showTranscriptFirst: false,
-      preferredAccent: "自动"
-    });
-  }
-
-  const existingCards = await dbApi.getAll("vocabCards");
-  if (existingCards.length > 0) return;
-
-  const today = localDate();
-  const cards = state.lessons.flatMap((lesson) => lesson.vocab.map((item) => ({
-    id: `${lesson.id}-${slugify(item.term)}`,
-    lessonId: lesson.id,
-    term: item.term,
-    meaning: item.meaning,
-    example: item.example,
-    dueDate: today,
-    ease: 2,
-    reviewCount: 0,
-    lastRating: null
-  })));
-
-  await Promise.all(cards.map((card) => dbApi.put("vocabCards", card)));
-}
-
-async function loadSettings() {
-  const record = await dbApi.get("settings", "user");
-  state.settings = record;
-}
-
-async function loadSnapshot() {
-  const [progress, attempts, mistakes, vocabCards] = await Promise.all([
-    dbApi.getAll("progress"),
-    dbApi.getAll("attempts"),
-    dbApi.getAll("mistakes"),
-    dbApi.getAll("vocabCards")
+async function refreshData() {
+  const [settings, snapshot] = await Promise.all([
+    state.db.loadSettings(),
+    state.db.snapshot()
   ]);
-
-  state.snapshot = { progress, attempts, mistakes, vocabCards };
+  state.settings = settings;
+  state.snapshot = snapshot;
 }
 
 function renderShell() {
-  const app = $("#app");
-  app.innerHTML = `
+  $("#app").innerHTML = `
     <div class="shell">
-      <aside class="sidebar">
+      <aside class="sidebar" aria-label="应用导航">
         <a class="brand" href="#/today" aria-label="返回今日训练">
           <span class="brand-mark">A</span>
           <span>
             <span class="brand-title">Auralift</span>
-            <span class="brand-sub">听力训练工作台</span>
+            <span class="brand-sub">Listening OS</span>
           </span>
         </a>
-        <nav class="side-nav" aria-label="主导航">
-          ${ROUTE_TABS.map(renderNavLink).join("")}
+        <nav class="side-nav">
+          ${ROUTES.map(renderNavItem).join("")}
         </nav>
-        <div class="sidebar-card">
-          <strong>训练原则</strong>
-          <p>先听，后看文字。每次只抓一个盲区，重复比数量更重要。</p>
-        </div>
+        <section class="side-note">
+          <span class="note-kicker">今日原则</span>
+          <strong>先听懂，再看懂。</strong>
+          <p>每轮只解决一个最明显的声音盲区。</p>
+        </section>
       </aside>
+
       <main class="main-area">
-        <div class="topbar">
-          <a class="brand" href="#/today" aria-label="返回今日训练">
+        <header class="mobile-topbar">
+          <a class="brand compact-brand" href="#/today" aria-label="返回今日训练">
             <span class="brand-mark">A</span>
             <span>
               <span class="brand-title">Auralift</span>
-              <span class="brand-sub">今日训练</span>
+              <span class="brand-sub">听力训练</span>
             </span>
           </a>
-          <a class="btn compact" href="#/library">选材料</a>
-        </div>
+          <a class="icon-btn" href="#/library" aria-label="选择材料">${icon("library")}</a>
+        </header>
+
         <div class="view-shell">
-          <div class="app-grid">
-            <section id="view" tabindex="-1"></section>
-            <aside id="context-panel" class="context-panel" aria-label="训练上下文"></aside>
-          </div>
+          <section id="view" class="view" tabindex="-1"></section>
+          <aside id="context-panel" class="context-panel" aria-label="训练上下文"></aside>
         </div>
       </main>
+
       <nav class="bottom-tabs" aria-label="底部导航">
-        ${ROUTE_TABS.map(renderTabLink).join("")}
+        ${ROUTES.map(renderTabItem).join("")}
       </nav>
     </div>
-    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
   `;
 }
 
-function renderNavLink(item) {
+function renderNavItem(item) {
   return `
     <a class="nav-link" data-tab="${item.id}" href="${item.href}">
-      <span class="nav-icon">${item.icon}</span>
-      <span>${item.label}</span>
+      ${icon(item.icon)}
+      <span>${html(item.label)}</span>
     </a>
   `;
 }
 
-function renderTabLink(item) {
+function renderTabItem(item) {
   return `
     <a class="tab-link" data-tab="${item.id}" href="${item.href}">
-      <span class="nav-icon">${item.icon}</span>
-      <span>${item.label}</span>
+      ${icon(item.icon)}
+      <span>${html(item.label)}</span>
     </a>
   `;
 }
 
-function bindGlobalEvents() {
+function bindEvents() {
   window.addEventListener("hashchange", renderRoute);
-  document.addEventListener("click", handleClick);
-  document.addEventListener("input", handleInput);
-  document.addEventListener("change", handleChange);
+  document.addEventListener("click", onClick);
+  document.addEventListener("input", onInput);
+  document.addEventListener("change", onChange);
+  window.addEventListener("keydown", onKeydown);
 }
 
 async function renderRoute() {
-  await loadSettings();
-  await loadSnapshot();
-
+  await refreshData();
   const route = parseRoute();
-  const view = $("#view");
-  if (!view) return;
+  const direction = transitionDirection(route);
+  state.previousRoute = state.route;
+  state.route = route;
 
-  setActiveNavigation(route.tab);
-
-  const direction = getTransitionDirection(route);
-  state.lastRoute = route;
-  view.innerHTML = await renderPage(route);
+  setActiveNav(route.tab);
+  $("#view").innerHTML = renderPage(route);
   $("#context-panel").innerHTML = renderContext(route);
   animateView(direction);
-  view.focus({ preventScroll: true });
+  $("#view").focus({ preventScroll: true });
 }
 
 function parseRoute() {
-  const rawPath = location.hash.replace(/^#/, "") || "/today";
-  const parts = rawPath.split("/").filter(Boolean);
+  const path = location.hash.replace(/^#/, "") || "/today";
+  const parts = path.split("/").filter(Boolean);
   const name = parts[0] || "today";
   const id = parts[1] || null;
   const isDetail = name === "train" || name === "dictation";
-  const isKnownTab = ROUTE_TABS.some((item) => item.id === name);
+  const knownTab = ROUTES.some((item) => item.id === name);
   const tab = isDetail ? state.lastTab : name;
-  if (!isDetail && isKnownTab) state.lastTab = name;
-  return {
-    name,
-    id,
-    path: rawPath,
-    tab,
-    depth: isDetail ? 1 : 0
-  };
+  if (!isDetail && knownTab) state.lastTab = name;
+  return { name, id, path, tab, depth: isDetail ? 1 : 0 };
 }
 
-function getTransitionDirection(route) {
-  if (state.skipAnimation) {
-    state.skipAnimation = false;
+function transitionDirection(route) {
+  if (state.suppressTransition || state.settings?.reduceMotion) {
+    state.suppressTransition = false;
     return "none";
   }
-
-  if (!state.lastRoute) return "forward";
-  if (route.depth > state.lastRoute.depth) return "forward";
-  if (route.depth < state.lastRoute.depth) return "back";
-  if (route.path !== state.lastRoute.path) return "tab";
+  if (!state.route) return "forward";
+  if (route.depth > state.route.depth) return "forward";
+  if (route.depth < state.route.depth) return "back";
+  if (route.path !== state.route.path) return "tab";
   return "none";
 }
 
 function animateView(direction) {
   const view = $("#view");
   if (!view || direction === "none" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
   const from = {
-    forward: "translate3d(28px, 0, 0)",
-    back: "translate3d(-22px, 0, 0)",
-    tab: "translate3d(0, 12px, 0)"
-  }[direction] || "translate3d(0, 8px, 0)";
+    forward: "translate3d(28px,0,0)",
+    back: "translate3d(-22px,0,0)",
+    tab: "translate3d(0,10px,0)"
+  }[direction];
 
   view.animate([
     { opacity: 0.001, transform: from },
-    { opacity: 1, transform: "translate3d(0, 0, 0)" }
+    { opacity: 1, transform: "translate3d(0,0,0)" }
   ], {
-    duration: direction === "tab" ? 180 : 240,
+    duration: direction === "tab" ? 170 : 230,
     easing: "cubic-bezier(0.32, 0.72, 0, 1)"
   });
 }
 
-function setActiveNavigation(tab) {
+function setActiveNav(tab) {
   $$(".nav-link, .tab-link").forEach((link) => {
     const active = link.dataset.tab === tab;
     link.classList.toggle("active", active);
-    if (active) {
-      link.setAttribute("aria-current", "page");
-    } else {
-      link.removeAttribute("aria-current");
-    }
+    if (active) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
   });
 }
 
-async function renderPage(route) {
+function renderPage(route) {
   if (route.name === "today") return renderToday();
   if (route.name === "library") return renderLibrary();
   if (route.name === "train") return renderTrain(route.id);
@@ -334,94 +229,86 @@ async function renderPage(route) {
   if (route.name === "vocab") return renderVocab();
   if (route.name === "stats") return renderStats();
   if (route.name === "settings") return renderSettings();
-  return renderNotFound();
+  return renderMissing();
 }
 
 function renderToday() {
-  const todayMinutes = getTodayMinutes();
+  const lesson = recommendedLesson();
+  const minutes = todayMinutes();
   const goal = state.settings.dailyGoalMinutes;
-  const recommended = pickRecommendedLesson();
-  const progress = getProgressMap();
-  const completedLessons = state.snapshot.progress.filter((item) => item.completed).length;
-  const dueCards = getDueVocabCards().length;
-  const streak = getStreakDays();
+  const percent = clamp(Math.round((minutes / goal) * 100), 0, 100);
+  const due = dueCards().length;
+  const progress = progressMap();
 
   return `
-    <div class="stack">
-      <header class="page-head">
+    <div class="screen">
+      <header class="screen-head">
         <div>
-          <p class="eyebrow">Today</p>
-          <h1>今天完成一个听力闭环</h1>
-          <p class="lead">先精听一句，再跟读和标记盲区。系统会把真实听错的内容推到词汇和复习里。</p>
+          <p class="kicker">Today</p>
+          <h1>今天练 ${Math.max(goal - minutes, 0)} 分钟就够了</h1>
+          <p>完成一轮精听、一次跟读、几张听力词汇卡。少而稳定，比刷材料更有效。</p>
         </div>
       </header>
 
-      <section class="hero-panel">
-        <div class="hero-content">
-          <p class="eyebrow">推荐材料 · ${escapeHtml(recommended.level)} · ${escapeHtml(recommended.accent)}</p>
-          <h2>${escapeHtml(recommended.title)}</h2>
-          <p class="lead">${escapeHtml(recommended.summary)}</p>
-          <div class="actions">
-            <a class="btn primary" href="#/train/${recommended.id}">开始精听</a>
-            <a class="btn" href="#/dictation/${recommended.id}">做听写</a>
-            <a class="btn ghost" href="#/library">换一个材料</a>
+      <section class="hero-card">
+        <div class="hero-copy">
+          <p class="kicker">推荐 · ${html(lesson.level)} · ${html(lesson.accent)}</p>
+          <h2>${html(lesson.title)}</h2>
+          <p>${html(lesson.summary)}</p>
+          <div class="action-row">
+            <a class="btn primary" href="#/train/${lesson.id}">${icon("play")}开始训练</a>
+            <a class="btn" href="#/dictation/${lesson.id}">${icon("pen")}听写</a>
           </div>
+        </div>
+        <div class="daily-ring" style="--value:${percent * 3.6}deg">
+          <strong>${minutes}</strong>
+          <span>/${goal} 分钟</span>
         </div>
       </section>
 
-      <section class="grid-3">
-        <div class="metric"><strong>${todayMinutes}</strong><span>今日已练分钟 / 目标 ${goal}</span></div>
-        <div class="metric"><strong>${streak}</strong><span>连续训练天数</span></div>
-        <div class="metric"><strong>${dueCards}</strong><span>今日待复习听力词汇</span></div>
+      <section class="metric-grid">
+        ${metric("连续", `${streakDays()} 天`, "每天 30 分钟优先")}
+        ${metric("待复习", `${due} 张`, "先听音再识义")}
+        ${metric("完成", `${state.snapshot.progress.filter((item) => item.completed).length} 篇`, "重复比数量重要")}
       </section>
 
       <section class="panel">
-        <div class="lesson-card-head">
+        <div class="section-title">
           <div>
-            <p class="eyebrow">Daily Plan</p>
-            <h2>今日训练</h2>
+            <p class="kicker">Plan</p>
+            <h2>今日路径</h2>
           </div>
-          <a class="btn compact" href="#/stats">看盲区</a>
+          <a class="text-link" href="#/stats">看盲区</a>
         </div>
-        <div class="lesson-list">
-          ${state.lessons.slice(0, 3).map((lesson) => renderPlanLesson(lesson, progress.get(lesson.id))).join("")}
-        </div>
-      </section>
-
-      <section class="grid-2">
-        <div class="panel">
-          <h3>精听流程</h3>
-          <p class="muted">听一句，暂停，复述，再看原文。每次训练只标记最明显的盲区。</p>
-        </div>
-        <div class="panel">
-          <h3>输入比例</h3>
-          <p class="muted">主动听优先，泛听用于补充暴露。听不懂 90% 的材料先降级。</p>
+        <div class="plan-list">
+          ${state.lessons.slice(0, 3).map((item) => lessonRow(item, progress.get(item.id))).join("")}
         </div>
       </section>
     </div>
   `;
 }
 
-function renderPlanLesson(lesson, progress) {
-  const value = progress ? Math.min(100, Math.round((progress.completedSentences / lesson.sentences.length) * 100)) : 0;
+function metric(label, value, caption) {
   return `
-    <article class="lesson-card">
-      <div class="lesson-card-head">
-        <div>
-          <h3 class="lesson-title">${escapeHtml(lesson.title)}</h3>
-          <div class="lesson-meta">
-            <span>${escapeHtml(lesson.series)}</span>
-            <span>${escapeHtml(lesson.level)}</span>
-            <span>${formatDuration(lesson.duration)}</span>
-            <span>可懂度 ${lesson.comprehension}%</span>
-          </div>
-        </div>
-        <a class="btn compact primary" href="#/train/${lesson.id}">训练</a>
+    <article class="metric">
+      <span>${html(label)}</span>
+      <strong>${html(value)}</strong>
+      <small>${html(caption)}</small>
+    </article>
+  `;
+}
+
+function lessonRow(lesson, progress) {
+  const done = progress ? clamp(Math.round((progress.completedSentences / lesson.sentences.length) * 100), 0, 100) : 0;
+  return `
+    <article class="lesson-row">
+      <div>
+        <h3>${html(lesson.title)}</h3>
+        <p>${html(lesson.series)} · ${html(lesson.level)} · ${formatDuration(lesson.duration)} · 可懂度 ${lesson.comprehension}%</p>
+        <div class="tag-row">${lesson.focus.map((item) => `<span class="tag">${html(item)}</span>`).join("")}</div>
+        <div class="progress" style="--progress:${done}%"><span></span></div>
       </div>
-      <div class="tags">
-        ${lesson.focus.map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
-      </div>
-      <div class="progress-line" aria-label="完成进度" style="--value:${value}%"><span></span></div>
+      <a class="icon-btn filled" href="#/train/${lesson.id}" aria-label="训练 ${attr(lesson.title)}">${icon("play")}</a>
     </article>
   `;
 }
@@ -433,214 +320,200 @@ function renderLibrary() {
     : state.lessons.filter((lesson) => lesson.level === state.libraryFilter);
 
   return `
-    <div class="stack">
-      <header class="page-head">
+    <div class="screen">
+      <header class="screen-head split">
         <div>
-          <p class="eyebrow">Library</p>
-          <h1>选择可理解材料</h1>
-          <p class="lead">从略低于当前水平的材料开始。精听材料要短、清晰、可重复。</p>
+          <p class="kicker">Library</p>
+          <h1>选一段听得懂的材料</h1>
+          <p>可懂度 60%-90% 最适合训练。太难先降级，太简单就提速或做听写。</p>
         </div>
         <div class="segmented" aria-label="等级筛选">
-          ${levels.map((level) => `<button data-action="filter-level" data-level="${level}" class="${state.libraryFilter === level ? "active" : ""}">${level}</button>`).join("")}
+          ${levels.map((level) => `<button data-action="filter-level" data-level="${attr(level)}" class="${level === state.libraryFilter ? "active" : ""}">${html(level)}</button>`).join("")}
         </div>
       </header>
       <section class="lesson-list">
-        ${lessons.map(renderLibraryCard).join("")}
+        ${lessons.map(libraryCard).join("")}
       </section>
     </div>
   `;
 }
 
-function renderLibraryCard(lesson) {
-  const progress = getProgressMap().get(lesson.id);
-  const value = progress ? Math.min(100, Math.round((progress.completedSentences / lesson.sentences.length) * 100)) : 0;
+function libraryCard(lesson) {
+  const progress = progressMap().get(lesson.id);
+  const done = progress ? clamp(Math.round((progress.completedSentences / lesson.sentences.length) * 100), 0, 100) : 0;
   return `
     <article class="lesson-card">
-      <div class="lesson-card-head">
-        <div>
-          <p class="eyebrow">${escapeHtml(lesson.topic)} · ${escapeHtml(lesson.recommendedMode)}</p>
-          <h2 class="lesson-title">${escapeHtml(lesson.title)}</h2>
-          <p class="muted">${escapeHtml(lesson.summary)}</p>
-          <div class="lesson-meta">
-            <span>${escapeHtml(lesson.level)}</span>
-            <span>${escapeHtml(lesson.accent)}</span>
-            <span>${formatDuration(lesson.duration)}</span>
-            <span>可懂度 ${lesson.comprehension}%</span>
-          </div>
+      <div class="card-main">
+        <p class="kicker">${html(lesson.topic)} · ${html(lesson.recommendedMode)}</p>
+        <h2>${html(lesson.title)}</h2>
+        <p>${html(lesson.summary)}</p>
+        <div class="meta-line">
+          <span>${html(lesson.level)}</span>
+          <span>${html(lesson.accent)}</span>
+          <span>${formatDuration(lesson.duration)}</span>
+          <span>${lesson.comprehension}% 可懂</span>
         </div>
-        <div class="actions">
-          <a class="btn compact primary" href="#/train/${lesson.id}">精听</a>
-          <a class="btn compact" href="#/dictation/${lesson.id}">听写</a>
-        </div>
+        <div class="tag-row">${lesson.focus.map((item) => `<span class="tag">${html(item)}</span>`).join("")}</div>
+        <div class="progress" style="--progress:${done}%"><span></span></div>
       </div>
-      <div class="tags">
-        ${lesson.focus.map((item, index) => `<span class="tag ${index === 0 ? "green" : ""}">${escapeHtml(item)}</span>`).join("")}
+      <div class="card-actions">
+        <a class="btn primary" href="#/train/${lesson.id}">${icon("play")}精听</a>
+        <a class="btn" href="#/dictation/${lesson.id}">${icon("pen")}听写</a>
       </div>
-      <div class="progress-line" style="--value:${value}%"><span></span></div>
     </article>
   `;
 }
 
 function renderTrain(lessonId) {
   const lesson = findLesson(lessonId);
-  if (!lesson) return renderNotFound();
+  if (!lesson) return renderMissing();
 
-  const index = getSentenceIndex(lesson);
+  const index = sentenceIndex(lesson);
   const sentence = lesson.sentences[index];
-  const reveal = getRevealState(lesson);
-  const loop = getLoopState(lesson);
-  const mode = getTrainMode(lesson);
-  const rate = state.settings.defaultRate;
-  const markedTypes = getMarkedTypes(sentence.id);
+  const reveal = revealState(lesson);
+  const loop = loopState(lesson);
+  const mode = trainMode(lesson);
+  const marked = markedTypes(sentence.id);
 
   return `
-    <div class="stack">
-      <header class="page-head">
+    <div class="screen train-screen">
+      <header class="screen-head split">
         <div>
-          <a class="btn compact ghost" href="#/library">返回素材库</a>
-          <p class="eyebrow">${escapeHtml(lesson.series)} · ${escapeHtml(lesson.level)} · ${escapeHtml(lesson.accent)}</p>
-          <h1>${escapeHtml(lesson.title)}</h1>
-          <p class="lead">${escapeHtml(lesson.summary)}</p>
+          <a class="back-link" href="#/library">${icon("back")}素材库</a>
+          <p class="kicker">${html(lesson.series)} · ${html(lesson.level)} · ${html(lesson.accent)}</p>
+          <h1>${html(lesson.title)}</h1>
         </div>
         <div class="segmented" aria-label="训练模式">
           ${["精听", "跟读"].map((item) => `<button data-action="set-mode" data-mode="${item}" class="${mode === item ? "active" : ""}">${item}</button>`).join("")}
         </div>
       </header>
 
-      <section class="panel player">
-        <div class="player-top">
-          <div class="lesson-meta">
-            <span>${mode}</span>
-            <span>第 ${index + 1} / ${lesson.sentences.length} 句</span>
-            <span>语速 ${rate}x</span>
-            <span>${loop ? "单句循环" : "顺序训练"}</span>
-          </div>
+      <section class="player-card">
+        <div class="player-meta">
+          <span>${mode}</span>
+          <span>第 ${index + 1}/${lesson.sentences.length} 句</span>
+          <span>${state.settings.defaultRate}x</span>
+          <span>${loop ? "单句循环" : "顺序"}</span>
         </div>
-        <div class="player-stage">
-          <div class="waveform" aria-hidden="true"></div>
-          <div class="sentence-display">
-            <div class="sentence-number">Sentence ${index + 1}</div>
-            <div class="sentence-text ${reveal ? "" : "hidden-text"}">${escapeHtml(sentence.text)}</div>
-            <p class="sentence-meaning">${reveal ? escapeHtml(sentence.meaning) : "先听，再决定是否显示原文"}</p>
-          </div>
+        <div class="sentence-stage">
+          <div class="wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+          <p class="sentence-count">Sentence ${index + 1}</p>
+          <h2 class="${reveal ? "" : "masked-text"}">${html(sentence.text)}</h2>
+          <p>${reveal ? html(sentence.meaning) : "先用耳朵判断意义，再显示原文。"}</p>
         </div>
-        <div class="control-row">
-          <button class="btn compact" data-action="prev-sentence">上一句</button>
-          <button class="btn primary" data-action="play-current">播放句子</button>
-          <button class="btn compact" data-action="next-sentence">下一句</button>
-          <button class="btn compact ${reveal ? "success" : ""}" data-action="toggle-reveal">${reveal ? "隐藏原文" : "显示原文"}</button>
-          <button class="btn compact ${loop ? "success" : ""}" data-action="toggle-loop">${loop ? "关闭循环" : "单句循环"}</button>
+        <div class="control-dock">
+          <button class="icon-btn" data-action="prev-sentence" aria-label="上一句">${icon("prev")}</button>
+          <button class="play-btn" data-action="play-current">${icon("play")}播放</button>
+          <button class="icon-btn" data-action="next-sentence" aria-label="下一句">${icon("next")}</button>
+          <button class="icon-btn ${reveal ? "active" : ""}" data-action="toggle-reveal" aria-label="显示或隐藏原文">${icon("eye")}</button>
+          <button class="icon-btn ${loop ? "active" : ""}" data-action="toggle-loop" aria-label="单句循环">${icon("repeat")}</button>
         </div>
       </section>
 
-      <section class="grid-2">
+      <section class="content-grid">
         <div class="panel">
-          <h3>标记听力盲区</h3>
-          <div class="mark-grid">
-            ${MISTAKE_TYPES.map((type) => `<button class="mark-btn ${markedTypes.includes(type) ? "marked" : ""}" data-action="toggle-mistake" data-type="${type}">${type}</button>`).join("")}
+          <div class="section-title">
+            <div>
+              <p class="kicker">Blind Spot</p>
+              <h2>这句卡在哪里</h2>
+            </div>
           </div>
-          <p class="small" style="margin-top:12px;">${escapeHtml(sentence.note)}</p>
+          <div class="mark-grid">
+            ${MISTAKE_TYPES.map((type) => `<button class="mark-btn ${marked.includes(type) ? "marked" : ""}" data-action="toggle-mistake" data-type="${type}">${html(type)}</button>`).join("")}
+          </div>
+          <p class="hint">${html(sentence.note)}</p>
         </div>
+
         <div class="panel">
-          <h3>${mode === "跟读" ? "跟读提示" : "精听提示"}</h3>
-          <p class="muted">${mode === "跟读" ? "播放后立刻跟读，不看文字。把节奏和重音放在第一位，不急着追求每个音完美。" : "第一遍只听意义，第二遍抓关键词，第三遍再显示原文确认盲区。"}</p>
-          <div class="actions">
-            <button class="btn compact" data-action="speed" data-speed="0.75">0.75x</button>
-            <button class="btn compact" data-action="speed" data-speed="1">1x</button>
-            <button class="btn compact" data-action="speed" data-speed="1.15">1.15x</button>
-            <button class="btn compact success" data-action="complete-lesson">完成本轮</button>
+          <div class="section-title">
+            <div>
+              <p class="kicker">Session</p>
+              <h2>本轮控制</h2>
+            </div>
+          </div>
+          <div class="chip-row">
+            ${[0.75, 0.9, 1, 1.15].map((rate) => `<button class="chip ${Number(state.settings.defaultRate) === rate ? "active" : ""}" data-action="speed" data-speed="${rate}">${rate}x</button>`).join("")}
+          </div>
+          <p class="hint">${mode === "跟读" ? "播放后立刻跟读，不看文字。优先模仿节奏、重音和停顿。" : "第一遍抓意义，第二遍抓关键词，第三遍显示原文确认盲区。"}</p>
+          <div class="action-row">
+            <button class="btn primary" data-action="complete-lesson">${icon("check")}完成本轮</button>
+            <a class="btn" href="#/dictation/${lesson.id}">${icon("pen")}听写</a>
           </div>
         </div>
       </section>
 
       <section class="panel">
-        <div class="lesson-card-head">
+        <div class="section-title">
           <div>
-            <h2>逐句训练</h2>
-            <p class="muted">点击任一句直接跳转，适合重复同一段材料。</p>
+            <p class="kicker">Transcript</p>
+            <h2>逐句复听</h2>
           </div>
-          <a class="btn compact" href="#/dictation/${lesson.id}">进入听写</a>
         </div>
         <div class="sentence-list">
-          ${lesson.sentences.map((item, itemIndex) => renderSentenceRow(item, itemIndex, index)).join("")}
+          ${lesson.sentences.map((item, itemIndex) => sentenceRow(item, itemIndex, index)).join("")}
         </div>
       </section>
     </div>
   `;
 }
 
-function renderSentenceRow(sentence, itemIndex, activeIndex) {
+function sentenceRow(sentence, itemIndex, activeIndex) {
   return `
     <button class="sentence-row ${itemIndex === activeIndex ? "active" : ""}" data-action="set-sentence" data-index="${itemIndex}">
-      <strong>${itemIndex + 1}. ${escapeHtml(sentence.text)}</strong>
-      <span class="small">${escapeHtml(sentence.meaning)}</span>
+      <span>${itemIndex + 1}</span>
+      <strong>${html(sentence.text)}</strong>
+      <small>${html(sentence.meaning)}</small>
     </button>
   `;
 }
 
 function renderDictation(lessonId) {
   const lesson = findLesson(lessonId);
-  if (!lesson) return renderNotFound();
-  const target = getDictationTarget(lesson);
+  if (!lesson) return renderMissing();
+  const target = dictationTarget(lesson);
 
   return `
-    <div class="stack">
-      <header class="page-head">
+    <div class="screen">
+      <header class="screen-head split">
         <div>
-          <a class="btn compact ghost" href="#/train/${lesson.id}">返回训练</a>
-          <p class="eyebrow">Dictation · ${escapeHtml(lesson.level)} · ${escapeHtml(lesson.accent)}</p>
-          <h1>30 秒听写</h1>
-          <p class="lead">先播放，不看原文。写完再对照，错词会暴露真实盲区。</p>
+          <a class="back-link" href="#/train/${lesson.id}">${icon("back")}训练页</a>
+          <p class="kicker">Dictation · ${html(lesson.level)}</p>
+          <h1>听写暴露盲区</h1>
+          <p>只写 30 秒。写完再看原文，错词就是下一轮精听材料。</p>
         </div>
-        <button class="btn primary" data-action="play-dictation">播放片段</button>
+        <button class="btn primary" data-action="play-dictation">${icon("speaker")}播放片段</button>
       </header>
 
-      <section class="dictation-box">
-        <textarea class="dictation-input" data-role="dictation-input" placeholder="听完后把你听到的英文写在这里">${escapeHtml(state.dictationText)}</textarea>
-        <div class="actions">
-          <button class="btn success" data-action="check-dictation">对照原文</button>
-          <button class="btn" data-action="clear-dictation">清空</button>
-        </div>
-        ${state.dictationResult ? renderDictationResult(target) : ""}
-      </section>
-
       <section class="panel">
-        <h2>听写材料</h2>
-        <p class="muted">当前片段来自 ${escapeHtml(lesson.title)} 的前 ${Math.min(3, lesson.sentences.length)} 句。第一版使用系统 TTS 播放，后续可以替换为真实音频。</p>
+        <textarea class="dictation-input" data-role="dictation-input" placeholder="写下你听到的英文">${html(state.dictationText)}</textarea>
+        <div class="action-row">
+          <button class="btn primary" data-action="check-dictation">${icon("check")}对照原文</button>
+          <button class="btn" data-action="clear-dictation">${icon("close")}清空</button>
+        </div>
+        ${state.dictationResult ? dictationResult(target) : ""}
       </section>
     </div>
   `;
 }
 
-function renderDictationResult(target) {
+function dictationResult(target) {
   const result = state.dictationResult;
   return `
-    <div style="margin-top:18px;">
-      <h3>得分 ${result.score}%</h3>
-      <p class="muted">绿色为对齐词，红色为漏听或写错。原文如下：</p>
-      <div class="compare-result">
-        ${result.words.map((item) => `<span class="word ${item.missed ? "missed" : ""}">${escapeHtml(item.word)}</span>`).join("")}
+    <div class="result-box">
+      <h2>${result.score}%</h2>
+      <p>红色是漏听或错位。把这些词放回原句复听。</p>
+      <div class="word-grid">
+        ${result.words.map((item) => `<span class="word ${item.missed ? "missed" : ""}">${html(item.word)}</span>`).join("")}
       </div>
-      <p class="small" style="margin-top:14px;">${escapeHtml(target)}</p>
+      <small>${html(target)}</small>
     </div>
   `;
 }
 
 function renderVocab() {
-  const cards = getDueVocabCards();
+  const cards = dueCards();
   if (cards.length === 0) {
-    return `
-      <div class="stack">
-        <header class="page-head">
-          <div>
-            <p class="eyebrow">Vocab</p>
-            <h1>今天没有到期卡片</h1>
-            <p class="lead">训练中标记的熟词、生词和听写错词会自动进入这里。</p>
-          </div>
-        </header>
-        <div class="empty">去素材库开始一轮精听，系统会继续生成复习内容。</div>
-      </div>
-    `;
+    return emptyScreen("Vocab", "今天没有到期卡片", "训练中标记的熟词、生词和听写错词会进入这里。", "#/library", "去选材料");
   }
 
   const index = Math.min(state.vocabIndex, cards.length - 1);
@@ -648,27 +521,29 @@ function renderVocab() {
   const lesson = findLesson(card.lessonId);
 
   return `
-    <div class="stack">
-      <header class="page-head">
+    <div class="screen">
+      <header class="screen-head">
         <div>
-          <p class="eyebrow">Listening Vocab</p>
-          <h1>先听音，再识义</h1>
-          <p class="lead">这里不训练拼写优先，而是训练“声音 -> 意义”的直接连接。</p>
+          <p class="kicker">Listening Vocab</p>
+          <h1>听音识义</h1>
+          <p>不要先看拼写。播放后先在脑中说出意思，再显示答案。</p>
         </div>
-        <div class="lesson-meta"><span>${index + 1} / ${cards.length}</span><span>${escapeHtml(lesson?.title || "训练材料")}</span></div>
       </header>
 
       <section class="vocab-card">
-        <p class="eyebrow">Audio First</p>
-        <button class="btn primary" data-action="play-vocab" data-term="${escapeAttr(card.term)}">播放音频</button>
-        <div class="vocab-term ${state.vocabRevealed ? "" : "masked"}">${escapeHtml(card.term)}</div>
-        <p class="lead">${state.vocabRevealed ? escapeHtml(card.meaning) : "播放后先在脑中说出意思，再显示答案。"}</p>
-        ${state.vocabRevealed ? `<p class="muted">${escapeHtml(card.example)}</p>` : ""}
-        <div class="actions">
-          <button class="btn" data-action="reveal-vocab">显示答案</button>
-          <button class="btn compact" data-action="review-vocab" data-rating="again">没听出</button>
-          <button class="btn compact" data-action="review-vocab" data-rating="hard">模糊</button>
-          <button class="btn compact success" data-action="review-vocab" data-rating="good">认识</button>
+        <div class="vocab-top">
+          <span>${index + 1}/${cards.length}</span>
+          <span>${html(lesson?.title || "训练材料")}</span>
+        </div>
+        <button class="listen-orb" data-action="play-vocab" data-term="${attr(card.term)}" aria-label="播放词汇音频">${icon("speaker")}</button>
+        <h2 class="${state.vocabRevealed ? "" : "masked-text"}">${html(card.term)}</h2>
+        <p>${state.vocabRevealed ? html(card.meaning) : "先听，再说出意思。"}</p>
+        ${state.vocabRevealed ? `<small>${html(card.example)}</small>` : ""}
+        <div class="action-row center">
+          <button class="btn" data-action="reveal-vocab">${icon("eye")}显示答案</button>
+          <button class="btn" data-action="review-vocab" data-rating="again">没听出</button>
+          <button class="btn" data-action="review-vocab" data-rating="hard">模糊</button>
+          <button class="btn primary" data-action="review-vocab" data-rating="good">${icon("check")}认识</button>
         </div>
       </section>
     </div>
@@ -679,43 +554,50 @@ function renderStats() {
   const attempts = state.snapshot.attempts;
   const mistakes = state.snapshot.mistakes;
   const minutes = Math.round(attempts.reduce((sum, item) => sum + (item.durationSeconds || 0), 0) / 60);
-  const finishedLessons = state.snapshot.progress.filter((item) => item.completed).length;
-  const distribution = getMistakeDistribution();
+  const distribution = mistakeDistribution();
 
   return `
-    <div class="stack">
-      <header class="page-head">
+    <div class="screen">
+      <header class="screen-head">
         <div>
-          <p class="eyebrow">Stats</p>
-          <h1>盲区报告</h1>
-          <p class="lead">统计不为了制造焦虑，而是帮你知道下一次该听什么、重复什么。</p>
+          <p class="kicker">Stats</p>
+          <h1>下一次该练什么</h1>
+          <p>统计只回答一个问题：最高频的听力盲区是什么。</p>
         </div>
       </header>
-      <section class="stat-grid">
-        <div class="stat-card"><div class="metric"><strong>${minutes}</strong><span>累计训练分钟</span></div></div>
-        <div class="stat-card"><div class="metric"><strong>${attempts.length}</strong><span>训练轮次</span></div></div>
-        <div class="stat-card"><div class="metric"><strong>${mistakes.length}</strong><span>已标记盲区</span></div></div>
-        <div class="stat-card"><div class="metric"><strong>${finishedLessons}</strong><span>完成材料</span></div></div>
+
+      <section class="metric-grid">
+        ${metric("累计", `${minutes} 分钟`, "训练时长")}
+        ${metric("轮次", `${attempts.length} 次`, "精听/跟读/听写")}
+        ${metric("盲区", `${mistakes.length} 个`, "已标记问题")}
       </section>
+
       <section class="panel">
-        <h2>错误类型分布</h2>
-        ${distribution.total === 0 ? `<div class="empty">还没有盲区记录。去训练页标记几处听错原因。</div>` : renderBars(distribution.items)}
+        <div class="section-title">
+          <div>
+            <p class="kicker">Distribution</p>
+            <h2>错误类型</h2>
+          </div>
+        </div>
+        ${distribution.total ? bars(distribution.items) : `<div class="empty">还没有数据。完成一轮训练后这里会出现分布。</div>`}
       </section>
+
       <section class="panel">
-        <h2>下一步建议</h2>
-        <p class="muted">${getNextAdvice(distribution.items)}</p>
+        <p class="kicker">Advice</p>
+        <h2>下轮建议</h2>
+        <p>${html(nextAdvice(distribution.items))}</p>
       </section>
     </div>
   `;
 }
 
-function renderBars(items) {
+function bars(items) {
   return `
     <div class="bar-list">
       ${items.map((item) => `
         <div class="bar-row">
-          <span>${escapeHtml(item.type)}</span>
-          <div class="bar-track" style="--value:${item.percent}%"><span></span></div>
+          <span>${html(item.type)}</span>
+          <div class="bar-track" style="--progress:${item.percent}%"><i></i></div>
           <strong>${item.count}</strong>
         </div>
       `).join("")}
@@ -725,123 +607,136 @@ function renderBars(items) {
 
 function renderSettings() {
   return `
-    <div class="stack">
-      <header class="page-head">
+    <div class="screen">
+      <header class="screen-head">
         <div>
-          <p class="eyebrow">Settings</p>
-          <h1>训练偏好</h1>
-          <p class="lead">这些设置保存在本机 IndexedDB。第一版不上传个人数据。</p>
+          <p class="kicker">Settings</p>
+          <h1>本地训练数据</h1>
+          <p>个人数据只保存在当前浏览器。正式上线必须让用户能导出、导入和清空。</p>
         </div>
       </header>
+
+      <section class="panel settings-list">
+        ${settingNumber("dailyGoalMinutes", "每日目标", "建议 30-60 分钟，稳定优先。", state.settings.dailyGoalMinutes)}
+        ${settingSelect("defaultRate", "默认语速", "精听可以降速，复听要回到正常语速。", state.settings.defaultRate, [0.75, 0.9, 1, 1.15, 1.25], "x")}
+        ${settingSelect("preferredAccent", "偏好口音", "自动会按材料等级推荐。", state.settings.preferredAccent, ["自动", "US", "UK", "AU"], "")}
+        ${settingToggle("showTranscriptFirst", "首次显示原文", "关闭时更符合声音优先。", state.settings.showTranscriptFirst)}
+        ${settingToggle("reduceMotion", "减少动效", "需要更稳的界面时打开。", state.settings.reduceMotion)}
+      </section>
+
       <section class="panel">
-        <div class="setting-row">
+        <div class="section-title">
           <div>
-            <h3>每日目标</h3>
-            <p class="muted">建议 30-60 分钟，保持每天不断比偶尔长时间更有效。</p>
+            <p class="kicker">Backup</p>
+            <h2>数据管理</h2>
           </div>
-          <input class="setting-control" data-setting="dailyGoalMinutes" type="number" min="10" max="180" step="5" value="${state.settings.dailyGoalMinutes}" />
         </div>
-        <div class="setting-row">
-          <div>
-            <h3>默认语速</h3>
-            <p class="muted">精听阶段可以降速，但最终要回到正常语速复听。</p>
-          </div>
-          <select class="setting-control" data-setting="defaultRate">
-            ${[0.75, 0.9, 1, 1.15, 1.25].map((rate) => `<option value="${rate}" ${Number(state.settings.defaultRate) === rate ? "selected" : ""}>${rate}x</option>`).join("")}
-          </select>
+        <div class="action-row">
+          <button class="btn" data-action="export-data">${icon("download")}导出数据</button>
+          <button class="btn" data-action="import-data">${icon("upload")}导入数据</button>
+          <button class="btn danger" data-action="reset-data">${icon("trash")}清空数据</button>
         </div>
-        <div class="setting-row">
-          <div>
-            <h3>首次显示原文</h3>
-            <p class="muted">关闭时更符合声音优先；打开适合刚开始建立声音和意义连接。</p>
-          </div>
-          <label class="switch">
-            <input data-setting="showTranscriptFirst" type="checkbox" ${state.settings.showTranscriptFirst ? "checked" : ""} />
-            <span></span>
-          </label>
-        </div>
-        <div class="setting-row">
-          <div>
-            <h3>偏好口音</h3>
-            <p class="muted">自动会优先按材料等级推荐，后续可扩展为多口音训练计划。</p>
-          </div>
-          <select class="setting-control" data-setting="preferredAccent">
-            ${["自动", "US", "UK", "AU"].map((accent) => `<option value="${accent}" ${state.settings.preferredAccent === accent ? "selected" : ""}>${accent}</option>`).join("")}
-          </select>
-        </div>
+        <input id="import-file" type="file" accept="application/json" hidden />
       </section>
     </div>
   `;
 }
 
-function renderContext(route) {
-  const lesson = route.id ? findLesson(route.id) : pickRecommendedLesson();
-  if (route.name === "stats") {
-    return `
-      <div class="panel">
-        <h3>读图方式</h3>
-        <p class="muted">最高频盲区就是下一周精听时最该主动标记和重复的对象。</p>
-      </div>
-      <div class="panel">
-        <h3>有效阈值</h3>
-        <p class="muted">材料可懂度低于 60% 时先降级；高于 90% 时可以提速或换真实材料。</p>
-      </div>
-    `;
-  }
+function settingNumber(key, title, caption, value) {
+  return `
+    <label class="setting-row">
+      <span><strong>${html(title)}</strong><small>${html(caption)}</small></span>
+      <input class="field" data-setting="${key}" type="number" min="10" max="180" step="5" value="${value}">
+    </label>
+  `;
+}
 
+function settingSelect(key, title, caption, value, options, suffix) {
+  return `
+    <label class="setting-row">
+      <span><strong>${html(title)}</strong><small>${html(caption)}</small></span>
+      <select class="field" data-setting="${key}">
+        ${options.map((option) => `<option value="${attr(option)}" ${String(option) === String(value) ? "selected" : ""}>${html(option)}${suffix}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function settingToggle(key, title, caption, checked) {
+  return `
+    <label class="setting-row">
+      <span><strong>${html(title)}</strong><small>${html(caption)}</small></span>
+      <span class="switch">
+        <input data-setting="${key}" type="checkbox" ${checked ? "checked" : ""}>
+        <i></i>
+      </span>
+    </label>
+  `;
+}
+
+function renderContext(route) {
   if (route.name === "settings") {
     return `
-      <div class="panel">
-        <h3>本地数据</h3>
-        <p class="muted">进度、听写记录和词汇卡都写入 IndexedDB。换浏览器或清站点数据会丢失。</p>
-      </div>
-      <div class="panel">
-        <h3>后续扩展</h3>
-        <p class="muted">账号同步、真实音频和 AI 纠音可以在训练闭环稳定后再接入。</p>
-      </div>
+      <section class="context-card">
+        <p class="kicker">Privacy</p>
+        <h3>离线优先</h3>
+        <p>所有进度和词汇卡保存在 IndexedDB。导出文件是完整备份。</p>
+      </section>
+      <section class="context-card">
+        <p class="kicker">Deploy</p>
+        <h3>自动发布</h3>
+        <p>main 分支更新会触发 GitHub Pages 部署。</p>
+      </section>
     `;
   }
 
+  if (route.name === "stats") {
+    return `
+      <section class="context-card">
+        <p class="kicker">Read</p>
+        <h3>最高频优先</h3>
+        <p>连续三天最高的盲区，就是下一周素材选择的依据。</p>
+      </section>
+    `;
+  }
+
+  const lesson = route.id ? findLesson(route.id) : recommendedLesson();
   return `
-    <div class="panel">
-      <p class="eyebrow">当前材料</p>
-      <h3>${escapeHtml(lesson?.title || "未选择材料")}</h3>
-      <p class="muted">${escapeHtml(lesson?.summary || "从素材库选择一个可理解材料开始训练。")}</p>
-      <div class="tags">
-        <span class="tag green">${escapeHtml(lesson?.level || "B1")}</span>
-        <span class="tag">${escapeHtml(lesson?.accent || "自动")}</span>
-        <span class="tag amber">${lesson?.comprehension || 80}% 可懂</span>
+    <section class="context-card">
+      <p class="kicker">Now</p>
+      <h3>${html(lesson.title)}</h3>
+      <p>${html(lesson.summary)}</p>
+      <div class="tag-row">
+        <span class="tag strong">${html(lesson.level)}</span>
+        <span class="tag">${html(lesson.accent)}</span>
+        <span class="tag">${lesson.comprehension}%</span>
       </div>
-    </div>
-    <div class="panel">
-      <h3>本轮目标</h3>
-      <p class="muted">听完 3-6 句即可结束。关键是把一个听错原因记录下来，而不是一次刷完。</p>
-    </div>
-    <div class="panel">
-      <h3>焦点</h3>
-      <div class="tags">
-        ${(lesson?.focus || ["精听", "跟读"]).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
-      </div>
+    </section>
+    <section class="context-card">
+      <p class="kicker">Focus</p>
+      <div class="tag-row">${lesson.focus.map((item) => `<span class="tag">${html(item)}</span>`).join("")}</div>
+    </section>
+  `;
+}
+
+function emptyScreen(kicker, title, caption, href, action) {
+  return `
+    <div class="screen">
+      <section class="empty-state">
+        <p class="kicker">${html(kicker)}</p>
+        <h1>${html(title)}</h1>
+        <p>${html(caption)}</p>
+        <a class="btn primary" href="${href}">${html(action)}</a>
+      </section>
     </div>
   `;
 }
 
-function renderNotFound() {
-  return `
-    <div class="stack">
-      <header class="page-head">
-        <div>
-          <p class="eyebrow">Not Found</p>
-          <h1>没有找到这个训练页面</h1>
-          <p class="lead">可能是材料不存在，或者路由拼写有误。</p>
-        </div>
-        <a class="btn primary" href="#/today">回到今日</a>
-      </header>
-    </div>
-  `;
+function renderMissing() {
+  return emptyScreen("Not Found", "没有找到这个页面", "路由可能已失效。", "#/today", "回到今日");
 }
 
-async function handleClick(event) {
+async function onClick(event) {
   const target = event.target.closest("[data-action]");
   if (!target) return;
 
@@ -851,192 +746,203 @@ async function handleClick(event) {
 
   if (action === "filter-level") {
     state.libraryFilter = target.dataset.level;
-    refreshRoute();
+    rerender();
+    return;
+  }
+
+  if (action === "set-mode" && lesson) {
+    state.modeByLesson[lesson.id] = target.dataset.mode;
+    rerender();
     return;
   }
 
   if (action === "set-sentence" && lesson) {
     state.sentenceIndex[lesson.id] = Number(target.dataset.index);
-    refreshRoute();
+    rerender();
     return;
   }
 
   if (action === "prev-sentence" && lesson) {
-    moveSentence(lesson, -1);
+    shiftSentence(lesson, -1);
     return;
   }
 
   if (action === "next-sentence" && lesson) {
-    moveSentence(lesson, 1);
+    shiftSentence(lesson, 1);
     return;
   }
 
   if (action === "toggle-reveal" && lesson) {
-    state.revealByLesson[lesson.id] = !getRevealState(lesson);
-    refreshRoute();
+    state.revealByLesson[lesson.id] = !revealState(lesson);
+    rerender();
     return;
   }
 
   if (action === "toggle-loop" && lesson) {
-    state.loopByLesson[lesson.id] = !getLoopState(lesson);
-    refreshRoute();
-    return;
-  }
-
-  if (action === "set-mode" && lesson) {
-    state.trainModeByLesson[lesson.id] = target.dataset.mode;
-    refreshRoute();
-    return;
-  }
-
-  if (action === "speed") {
-    await updateSetting("defaultRate", Number(target.dataset.speed));
-    toast(`语速已设为 ${target.dataset.speed}x`);
-    refreshRoute();
+    state.loopByLesson[lesson.id] = !loopState(lesson);
+    rerender();
     return;
   }
 
   if (action === "play-current" && lesson) {
-    await playCurrentSentence(lesson);
+    await playCurrent(lesson);
+    return;
+  }
+
+  if (action === "speed") {
+    await saveSetting("defaultRate", Number(target.dataset.speed));
+    toast(`语速 ${target.dataset.speed}x`);
+    rerender();
     return;
   }
 
   if (action === "toggle-mistake" && lesson) {
     await toggleMistake(lesson, target.dataset.type);
-    refreshRoute();
+    rerender();
     return;
   }
 
   if (action === "complete-lesson" && lesson) {
-    await completeLessonAttempt(lesson);
-    refreshRoute();
+    await completeAttempt(lesson);
+    rerender();
     return;
   }
 
   if (action === "play-dictation" && lesson) {
-    await speakText(getDictationTarget(lesson), lesson.accent, state.settings.defaultRate);
+    await state.audio.playText(dictationTarget(lesson), lesson.accent, state.settings.defaultRate);
     return;
   }
 
   if (action === "check-dictation" && lesson) {
     await checkDictation(lesson);
-    refreshRoute();
+    rerender();
     return;
   }
 
   if (action === "clear-dictation") {
     state.dictationText = "";
     state.dictationResult = null;
-    refreshRoute();
+    rerender();
     return;
   }
 
   if (action === "play-vocab") {
-    await speakText(target.dataset.term, "US", state.settings.defaultRate);
+    await state.audio.playText(target.dataset.term, "US", state.settings.defaultRate);
     return;
   }
 
   if (action === "reveal-vocab") {
     state.vocabRevealed = true;
-    refreshRoute();
+    rerender();
     return;
   }
 
   if (action === "review-vocab") {
-    await reviewCurrentVocab(target.dataset.rating);
-    refreshRoute();
+    await reviewVocab(target.dataset.rating);
+    rerender();
+    return;
+  }
+
+  if (action === "export-data") {
+    const data = await state.db.exportData();
+    downloadJson(`auralift-backup-${localDate()}.json`, data);
+    toast("数据已导出");
+    return;
+  }
+
+  if (action === "import-data") {
+    $("#import-file")?.click();
+    return;
+  }
+
+  if (action === "reset-data") {
+    if (window.confirm("确认清空本机训练数据？此操作不可撤销。")) {
+      await state.db.clearUserData();
+      state.vocabIndex = 0;
+      toast("本机数据已清空");
+      rerender();
+    }
   }
 }
 
-function handleInput(event) {
+function onInput(event) {
   if (event.target.matches("[data-role='dictation-input']")) {
     state.dictationText = event.target.value;
   }
 }
 
-async function handleChange(event) {
-  const settingName = event.target.dataset.setting;
-  if (!settingName) return;
-
-  let value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
-  if (settingName === "dailyGoalMinutes" || settingName === "defaultRate") {
-    value = Number(value);
-  }
-
-  await updateSetting(settingName, value);
-  toast("设置已保存");
-  refreshRoute();
-}
-
-function refreshRoute() {
-  state.skipAnimation = true;
-  renderRoute();
-}
-
-function moveSentence(lesson, delta) {
-  const current = getSentenceIndex(lesson);
-  const next = Math.max(0, Math.min(lesson.sentences.length - 1, current + delta));
-  state.sentenceIndex[lesson.id] = next;
-  refreshRoute();
-}
-
-async function playCurrentSentence(lesson) {
-  const index = getSentenceIndex(lesson);
-  const sentence = lesson.sentences[index];
-  await speakText(sentence.text, lesson.accent, state.settings.defaultRate);
-
-  if (!getLoopState(lesson) && index < lesson.sentences.length - 1) {
-    state.sentenceIndex[lesson.id] = index + 1;
-    refreshRoute();
-  }
-}
-
-function speakText(text, accent, rate = 1) {
-  return new Promise((resolve) => {
-    if (!("speechSynthesis" in window)) {
-      toast("当前浏览器不支持语音合成");
-      resolve();
-      return;
+async function onChange(event) {
+  if (event.target.id === "import-file" && event.target.files?.[0]) {
+    try {
+      const payload = await readJsonFile(event.target.files[0]);
+      await state.db.importData(payload);
+      toast("数据已导入");
+      await renderRoute();
+    } catch (error) {
+      console.error(error);
+      toast("导入失败：文件格式不正确");
     }
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = accentToLang(accent);
-    utterance.rate = Number(rate) || 1;
-    utterance.pitch = 1;
-
-    const voice = pickVoice(utterance.lang);
-    if (voice) utterance.voice = voice;
-
-    utterance.onend = resolve;
-    utterance.onerror = resolve;
-    window.speechSynthesis.speak(utterance);
-  });
-}
-
-function pickVoice(lang) {
-  const voices = window.speechSynthesis.getVoices();
-  return voices.find((voice) => voice.lang === lang) || voices.find((voice) => voice.lang.startsWith(lang.split("-")[0])) || null;
-}
-
-function accentToLang(accent) {
-  if (accent === "UK") return "en-GB";
-  if (accent === "AU") return "en-AU";
-  return "en-US";
-}
-
-async function toggleMistake(lesson, type) {
-  const sentence = lesson.sentences[getSentenceIndex(lesson)];
-  const id = `${sentence.id}-${slugify(type)}`;
-  const existing = await dbApi.get("mistakes", id);
-
-  if (existing) {
-    await dbApi.delete("mistakes", id);
-    toast(`已取消标记：${type}`);
     return;
   }
 
-  await dbApi.put("mistakes", {
+  const key = event.target.dataset.setting;
+  if (!key) return;
+  let value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+  if (key === "dailyGoalMinutes" || key === "defaultRate") value = Number(value);
+  await saveSetting(key, value);
+  toast("设置已保存");
+  rerender();
+}
+
+function onKeydown(event) {
+  const route = parseRoute();
+  const lesson = route.id ? findLesson(route.id) : null;
+  if (!lesson || route.name !== "train") return;
+  if (event.key === " ") {
+    event.preventDefault();
+    playCurrent(lesson);
+  }
+  if (event.key === "ArrowLeft") shiftSentence(lesson, -1);
+  if (event.key === "ArrowRight") shiftSentence(lesson, 1);
+}
+
+function rerender() {
+  state.suppressTransition = true;
+  renderRoute();
+}
+
+function shiftSentence(lesson, delta) {
+  const current = sentenceIndex(lesson);
+  state.sentenceIndex[lesson.id] = clamp(current + delta, 0, lesson.sentences.length - 1);
+  rerender();
+}
+
+async function playCurrent(lesson) {
+  const index = sentenceIndex(lesson);
+  const sentence = lesson.sentences[index];
+  await state.audio.playSentence(lesson, sentence, state.settings.defaultRate);
+  if (!loopState(lesson) && index < lesson.sentences.length - 1) {
+    state.sentenceIndex[lesson.id] = index + 1;
+    rerender();
+  }
+}
+
+async function saveSetting(key, value) {
+  state.settings = { ...state.settings, [key]: value };
+  await state.db.saveSettings(state.settings);
+}
+
+async function toggleMistake(lesson, type) {
+  const sentence = lesson.sentences[sentenceIndex(lesson)];
+  const id = `${sentence.id}-${slugify(type)}`;
+  const existing = await state.db.get("mistakes", id);
+  if (existing) {
+    await state.db.delete("mistakes", id);
+    toast(`已取消：${type}`);
+    return;
+  }
+
+  await state.db.put("mistakes", {
     id,
     lessonId: lesson.id,
     sentenceId: sentence.id,
@@ -1049,41 +955,40 @@ async function toggleMistake(lesson, type) {
   toast(`已标记：${type}`);
 }
 
-async function completeLessonAttempt(lesson) {
-  const current = getSentenceIndex(lesson);
-  const progress = await dbApi.get("progress", lesson.id);
-  const completedSentences = Math.max(progress?.completedSentences || 0, current + 1);
+async function completeAttempt(lesson) {
+  const current = sentenceIndex(lesson);
+  const existing = await state.db.get("progress", lesson.id);
+  const completedSentences = Math.max(existing?.completedSentences || 0, current + 1);
   const completed = completedSentences >= lesson.sentences.length;
 
-  await dbApi.put("progress", {
+  await state.db.put("progress", {
     lessonId: lesson.id,
     completedSentences,
     completed,
     updatedAt: new Date().toISOString()
   });
 
-  await dbApi.add("attempts", {
+  await state.db.add("attempts", {
     lessonId: lesson.id,
-    mode: getTrainMode(lesson),
+    mode: trainMode(lesson),
     date: localDate(),
-    durationSeconds: Math.max(120, Math.round((current + 1) * 70)),
+    durationSeconds: Math.max(120, (current + 1) * 70),
     createdAt: new Date().toISOString()
   });
 
-  toast(completed ? "这篇材料已完成" : "本轮训练已记录");
+  toast(completed ? "材料已完成" : "本轮已记录");
 }
 
 async function checkDictation(lesson) {
-  const target = getDictationTarget(lesson);
-  const correctWords = normalizeWords(target);
-  const inputWords = normalizeWords(state.dictationText);
-  const words = correctWords.map((word, index) => ({ word, missed: inputWords[index] !== word }));
+  const target = dictationTarget(lesson);
+  const correct = normalizeWords(target);
+  const input = normalizeWords(state.dictationText);
+  const words = correct.map((word, index) => ({ word, missed: input[index] !== word }));
   const matched = words.filter((item) => !item.missed).length;
-  const score = correctWords.length === 0 ? 0 : Math.round((matched / correctWords.length) * 100);
-
+  const score = correct.length ? Math.round((matched / correct.length) * 100) : 0;
   state.dictationResult = { score, words };
 
-  await dbApi.add("attempts", {
+  await state.db.add("attempts", {
     lessonId: lesson.id,
     mode: "听写",
     date: localDate(),
@@ -1093,80 +998,68 @@ async function checkDictation(lesson) {
   });
 
   if (score < 85) {
-    await addDictationMistake(lesson, score);
+    await state.db.put("mistakes", {
+      id: `${lesson.id}-dictation-${Date.now()}`,
+      lessonId: lesson.id,
+      sentenceId: `${lesson.id}-dictation`,
+      type: "听写漏听",
+      note: `听写得分 ${score}%`,
+      text: target,
+      date: localDate(),
+      createdAt: new Date().toISOString()
+    });
   }
 
-  toast(`听写得分 ${score}%`);
+  toast(`听写 ${score}%`);
 }
 
-async function addDictationMistake(lesson, score) {
-  const id = `${lesson.id}-dictation-${Date.now()}`;
-  await dbApi.put("mistakes", {
-    id,
-    lessonId: lesson.id,
-    sentenceId: `${lesson.id}-dictation`,
-    type: "听写漏听",
-    note: `听写得分 ${score}%`,
-    text: getDictationTarget(lesson),
-    date: localDate(),
-    createdAt: new Date().toISOString()
-  });
-}
-
-async function reviewCurrentVocab(rating) {
-  const cards = getDueVocabCards();
-  if (cards.length === 0) return;
-  const index = Math.min(state.vocabIndex, cards.length - 1);
-  const card = cards[index];
+async function reviewVocab(rating) {
+  const cards = dueCards();
+  if (!cards.length) return;
+  const card = cards[Math.min(state.vocabIndex, cards.length - 1)];
   const nextDays = { again: 0, hard: 1, good: Math.max(2, card.ease + 1) }[rating];
   const easeDelta = { again: -1, hard: 0, good: 1 }[rating];
 
-  await dbApi.put("vocabCards", {
+  await state.db.put("vocabCards", {
     ...card,
-    ease: Math.max(1, Math.min(7, card.ease + easeDelta)),
+    ease: clamp(card.ease + easeDelta, 1, 7),
     reviewCount: card.reviewCount + 1,
     lastRating: rating,
     dueDate: localDate(nextDays)
   });
 
-  state.vocabIndex = Math.min(index + 1, cards.length - 1);
+  state.vocabIndex = Math.min(state.vocabIndex + 1, cards.length - 1);
   state.vocabRevealed = false;
-  toast("复习记录已保存");
+  toast("复习已保存");
 }
 
-async function updateSetting(key, value) {
-  state.settings = { ...state.settings, [key]: value };
-  await dbApi.put("settings", state.settings);
-}
-
-function pickRecommendedLesson() {
-  const progress = getProgressMap();
-  const accent = state.settings?.preferredAccent;
-  const candidates = state.lessons
+function recommendedLesson() {
+  const progress = progressMap();
+  const preferred = state.settings?.preferredAccent;
+  const pool = state.lessons
     .filter((lesson) => !progress.get(lesson.id)?.completed)
-    .filter((lesson) => !accent || accent === "自动" || lesson.accent === accent);
-
-  return candidates[0] || state.lessons[0];
+    .filter((lesson) => preferred === "自动" || !preferred || lesson.accent === preferred);
+  return pool[0] || state.lessons[0];
 }
 
 function findLesson(id) {
   return state.lessons.find((lesson) => lesson.id === id) || null;
 }
 
-function getProgressMap() {
+function progressMap() {
   return new Map((state.snapshot?.progress || []).map((item) => [item.lessonId, item]));
 }
 
-function getTodayMinutes() {
+function todayMinutes() {
   const today = localDate();
-  const seconds = (state.snapshot?.attempts || [])
+  const seconds = state.snapshot.attempts
     .filter((item) => item.date === today)
     .reduce((sum, item) => sum + (item.durationSeconds || 0), 0);
   return Math.round(seconds / 60);
 }
 
-function getStreakDays() {
-  const dates = new Set((state.snapshot?.attempts || []).map((item) => item.date));
+function streakDays() {
+  const dates = new Set(state.snapshot.attempts.map((item) => item.date));
   let streak = 0;
   for (let offset = 0; offset < 365; offset += 1) {
     if (!dates.has(localDate(-offset))) break;
@@ -1175,110 +1068,66 @@ function getStreakDays() {
   return streak;
 }
 
-function getDueVocabCards() {
+function dueCards() {
   const today = localDate();
-  return (state.snapshot?.vocabCards || [])
+  return state.snapshot.vocabCards
     .filter((card) => card.dueDate <= today)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 
-function getSentenceIndex(lesson) {
+function sentenceIndex(lesson) {
   return state.sentenceIndex[lesson.id] || 0;
 }
 
-function getRevealState(lesson) {
+function revealState(lesson) {
   if (state.revealByLesson[lesson.id] === undefined) {
     state.revealByLesson[lesson.id] = Boolean(state.settings.showTranscriptFirst);
   }
   return state.revealByLesson[lesson.id];
 }
 
-function getLoopState(lesson) {
+function loopState(lesson) {
   return Boolean(state.loopByLesson[lesson.id]);
 }
 
-function getTrainMode(lesson) {
-  if (!state.trainModeByLesson[lesson.id]) {
-    state.trainModeByLesson[lesson.id] = lesson.recommendedMode === "跟读" ? "跟读" : "精听";
+function trainMode(lesson) {
+  if (!state.modeByLesson[lesson.id]) {
+    state.modeByLesson[lesson.id] = lesson.recommendedMode === "跟读" ? "跟读" : "精听";
   }
-  return state.trainModeByLesson[lesson.id];
+  return state.modeByLesson[lesson.id];
 }
 
-function getMarkedTypes(sentenceId) {
-  return (state.snapshot?.mistakes || [])
+function markedTypes(sentenceId) {
+  return state.snapshot.mistakes
     .filter((item) => item.sentenceId === sentenceId)
     .map((item) => item.type);
 }
 
-function getDictationTarget(lesson) {
+function dictationTarget(lesson) {
   return lesson.sentences.slice(0, 3).map((sentence) => sentence.text).join(" ");
 }
 
-function getMistakeDistribution() {
+function mistakeDistribution() {
   const counts = new Map();
-  (state.snapshot?.mistakes || []).forEach((item) => {
-    counts.set(item.type, (counts.get(item.type) || 0) + 1);
-  });
+  state.snapshot.mistakes.forEach((item) => counts.set(item.type, (counts.get(item.type) || 0) + 1));
   const total = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
-  const items = Array.from(counts.entries())
-    .map(([type, count]) => ({ type, count, percent: total === 0 ? 0 : Math.round((count / total) * 100) }))
-    .sort((a, b) => b.count - a.count);
-  return { total, items };
+  return {
+    total,
+    items: Array.from(counts.entries())
+      .map(([type, count]) => ({ type, count, percent: total ? Math.round((count / total) * 100) : 0 }))
+      .sort((a, b) => b.count - a.count)
+  };
 }
 
-function getNextAdvice(items) {
-  if (!items.length) return "先完成一轮精听，并至少标记 2 个听错原因。";
+function nextAdvice(items) {
+  if (!items.length) return "先完成一轮精听，并至少标记两个听错原因。";
   const top = items[0].type;
-  if (top === "连读") return "下一轮选生活对话材料，重点重复动词短语和介词连接。";
-  if (top === "弱读") return "把功能词放进跟读目标，尤其是 to、of、and、would、have。";
-  if (top === "生词") return "先降低材料难度，把新词做成听音识义卡片再回听原句。";
-  if (top === "口音") return "保持同一主题，切换 US、UK、AU 口音各听一遍。";
+  if (top === "连读") return "下一轮选生活对话，重点重复动词短语和介词连接。";
+  if (top === "弱读") return "跟读时专门盯 to、of、and、would、have 这些功能词。";
+  if (top === "生词") return "先降低材料难度，把新词做成听音识义卡再回听原句。";
+  if (top === "口音") return "保持同一主题，轮换 US、UK、AU 口音各听一遍。";
   if (top === "语速快") return "先 0.75x 精听，再 1x 复听，最后只听关键词复述。";
-  return "继续用同一材料重复 3 轮，每轮只解决一个最高频盲区。";
-}
-
-function normalizeWords(text) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9'\s]/g, "")
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-function localDate(dayOffset = 0) {
-  const date = new Date();
-  date.setDate(date.getDate() + dayOffset);
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
-  const parts = new Intl.DateTimeFormat("en", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).formatToParts(date);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function formatDuration(seconds) {
-  const minutes = Math.max(1, Math.round(seconds / 60));
-  return `${minutes} 分钟`;
-}
-
-function slugify(value) {
-  return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function escapeAttr(value) {
-  return escapeHtml(value);
+  return "继续用同一材料重复三轮，每轮只解决一个最高频盲区。";
 }
 
 function toast(message) {
@@ -1286,6 +1135,11 @@ function toast(message) {
   if (!element) return;
   element.textContent = message;
   element.classList.add("show");
-  window.clearTimeout(toast.timer);
-  toast.timer = window.setTimeout(() => element.classList.remove("show"), 1800);
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => element.classList.remove("show"), 1800);
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("service-worker.js").catch(() => {});
 }

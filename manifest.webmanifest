@@ -1,0 +1,19 @@
+{
+  "name": "Auralift 英语听力训练",
+  "short_name": "Auralift",
+  "description": "基于精听、跟读、听写和听力词汇复习的英语听力训练应用。",
+  "start_url": "./#/today",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f7f4",
+  "theme_color": "#f6f7f4",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

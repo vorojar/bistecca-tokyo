@@ -28,11 +28,15 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Validate static assets
+        run: node tools/validate-static.mjs
+
       - name: Prepare static site
         run: |
           mkdir -p _site
-          cp index.html _site/
+          cp index.html manifest.webmanifest service-worker.js _site/
           cp -R styles scripts data _site/
+          cp -R assets _site/
 
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
