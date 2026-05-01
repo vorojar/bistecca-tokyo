@@ -31,6 +31,8 @@ export interface ViewModel {
   revealByLesson: Record<string, boolean | undefined>;
   loopByLesson: Record<string, boolean | undefined>;
   modeByLesson: Record<string, "精听" | "跟读" | undefined>;
+  heardBySentence: Record<string, boolean | undefined>;
+  activePlayback: { lessonId: string; sentenceId: string } | null;
   dictationText: string;
   dictationResult: DictationResult | null;
   vocabIndex: number;
@@ -97,6 +99,7 @@ export function renderShell(): string {
       </nav>
     </div>
     <div id="modal-root"></div>
+    <div id="player-root"></div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   `;
 }
@@ -110,6 +113,27 @@ export function renderPage(route: RouteState, model: ViewModel): string {
   if (route.name === "stats") return renderStats(model);
   if (route.name === "settings") return renderSettings(model);
   return emptyScreen("Not Found", "没有找到这个页面", "路由可能已失效。", "#/today", "回到今日");
+}
+
+export function renderGlobalPlayer(route: RouteState, model: ViewModel): string {
+  if (route.name !== "train" || !route.id) return "";
+  const lesson = findLesson(model.lessons, route.id);
+  if (!lesson) return "";
+  const index = getSentenceIndex(model, lesson);
+  const sentence = lesson.sentences[index];
+  const reveal = revealState(model, lesson);
+  const loop = loopState(model, lesson);
+  const isPlaying = isCurrentSentencePlaying(model, lesson, sentence);
+
+  return `
+    <div class="mobile-control-bar" role="toolbar" aria-label="移动端播放器控制">
+      <button class="icon-btn" data-action="prev-sentence" aria-label="上一句">${icon("prev")}</button>
+      ${playButton(isPlaying)}
+      <button class="icon-btn" data-action="next-sentence" aria-label="下一句">${icon("next")}</button>
+      <button class="icon-btn ${reveal ? "active" : ""}" data-action="toggle-reveal" aria-label="显示或隐藏原文">${icon("eye")}</button>
+      <button class="icon-btn ${loop ? "active" : ""}" data-action="toggle-loop" aria-label="单句循环">${icon("repeat")}</button>
+    </div>
+  `;
 }
 
 export function renderContext(route: RouteState, model: ViewModel): string {
@@ -290,6 +314,10 @@ function renderTrain(lessonId: string | null, model: ViewModel): string {
   const loop = loopState(model, lesson);
   const mode = trainMode(model, lesson);
   const marked = markedTypes(model, sentence.id);
+  const heard = Boolean(model.heardBySentence[sentence.id]);
+  const isPlaying = isCurrentSentencePlaying(model, lesson, sentence);
+  const diagnosisReady = heard || reveal || marked.length > 0;
+  const stageLabel = reveal ? "核对原文" : heard ? "听后判断" : "盲听";
 
   return `
     <div class="screen train-screen">
@@ -308,44 +336,46 @@ function renderTrain(lessonId: string | null, model: ViewModel): string {
         <div class="player-meta">
           <span>${mode}</span>
           <span>第 ${index + 1}/${lesson.sentences.length} 句</span>
+          <span>${stageLabel}</span>
           <span>${model.settings.defaultRate}x</span>
           <span>${loop ? "单句循环" : "顺序"}</span>
         </div>
         <div class="sentence-stage">
-          <div class="wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+          <div class="wave ${isPlaying ? "playing" : ""}" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
           <p class="sentence-count">Sentence ${index + 1}</p>
           <h2 class="${reveal ? "" : "masked-text"}">${html(sentence.text)}</h2>
-          <p>${reveal ? html(sentence.meaning) : "先用耳朵判断意义，再显示原文。"}</p>
+          <p>${reveal ? html(sentence.meaning) : isPlaying ? "正在播放。先不要看文字，抓住这句话的大意。" : heard ? "现在判断：听懂了吗？没听清再显示原文。" : "先听一遍，再判断有没有卡住。"}</p>
         </div>
         <div class="control-dock" role="toolbar" aria-label="播放器控制">
           <button class="icon-btn" data-action="prev-sentence" aria-label="上一句">${icon("prev")}</button>
-          <button class="play-btn" data-action="play-current">${icon("play")}播放</button>
+          ${playButton(isPlaying)}
           <button class="icon-btn" data-action="next-sentence" aria-label="下一句">${icon("next")}</button>
           <button class="icon-btn ${reveal ? "active" : ""}" data-action="toggle-reveal" aria-label="显示或隐藏原文">${icon("eye")}</button>
           <button class="icon-btn ${loop ? "active" : ""}" data-action="toggle-loop" aria-label="单句循环">${icon("repeat")}</button>
         </div>
       </section>
 
-      <div class="mobile-control-bar" role="toolbar" aria-label="移动端播放器控制">
-        <button class="icon-btn" data-action="prev-sentence" aria-label="移动端上一句">${icon("prev")}</button>
-        <button class="play-btn" data-action="play-current">${icon("play")}播放</button>
-        <button class="icon-btn" data-action="next-sentence" aria-label="移动端下一句">${icon("next")}</button>
-        <button class="icon-btn ${reveal ? "active" : ""}" data-action="toggle-reveal" aria-label="移动端显示或隐藏原文">${icon("eye")}</button>
-        <button class="icon-btn ${loop ? "active" : ""}" data-action="toggle-loop" aria-label="移动端单句循环">${icon("repeat")}</button>
-      </div>
-
       <section class="content-grid">
         <div class="panel">
           <div class="section-title">
             <div>
-              <p class="kicker">Blind Spot</p>
-              <h2>这句卡在哪里</h2>
+              <p class="kicker">After Listening</p>
+              <h2>${diagnosisReady ? "听完再标记" : "先听，不急着判断"}</h2>
             </div>
           </div>
-          <div class="mark-grid">
-            ${MISTAKE_TYPES.map((type) => `<button class="mark-btn ${marked.includes(type) ? "marked" : ""}" data-action="toggle-mistake" data-type="${type}">${html(type)}</button>`).join("")}
-          </div>
-          <p class="hint">${html(sentence.note)}</p>
+          ${diagnosisReady ? `
+            <p class="diagnosis-copy">${reveal ? "对照原文后，只标记真正卡住的声音问题。" : "如果没完全听懂，先显示原文核对，再标记卡点。"}</p>
+            <div class="mark-grid">
+              ${MISTAKE_TYPES.map((type) => `<button class="mark-btn ${marked.includes(type) ? "marked" : ""}" data-action="toggle-mistake" data-type="${type}">${html(type)}</button>`).join("")}
+            </div>
+            <p class="hint">${html(sentence.note)}</p>
+          ` : `
+            <div class="diagnosis-empty">
+              ${icon("speaker")}
+              <strong>播放这一句，先只靠耳朵理解。</strong>
+              <span>听完后这里才会出现卡点标记，避免你被答案牵着走。</span>
+            </div>
+          `}
         </div>
 
         <div class="panel">
@@ -849,6 +879,18 @@ export function loopState(model: ViewModel, lesson: Lesson): boolean {
 
 export function trainMode(model: ViewModel, lesson: Lesson): "精听" | "跟读" {
   return model.modeByLesson[lesson.id] ?? (lesson.recommendedMode === "跟读" ? "跟读" : "精听");
+}
+
+function isCurrentSentencePlaying(model: ViewModel, lesson: Lesson, sentence: LessonSentence): boolean {
+  return model.activePlayback?.lessonId === lesson.id && model.activePlayback.sentenceId === sentence.id;
+}
+
+function playButton(isPlaying: boolean): string {
+  return `
+    <button class="play-btn ${isPlaying ? "playing" : ""}" data-action="play-current" aria-label="${isPlaying ? "暂停播放" : "播放当前句"}">
+      ${icon(isPlaying ? "pause" : "play")}${isPlaying ? "暂停" : "播放"}
+    </button>
+  `;
 }
 
 export function markedTypes(model: ViewModel, sentenceId: string): string[] {

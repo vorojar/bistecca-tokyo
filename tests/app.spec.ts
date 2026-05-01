@@ -92,6 +92,13 @@ test("核心训练流程可完成一轮并进入统计", async ({ page }) => {
   await dismissOnboarding(page);
   await expect(page.locator("h1", { hasText: "A Short Coffee Chat" })).toBeVisible();
 
+  await expect(page.getByRole("heading", { name: "先听，不急着判断" })).toBeVisible();
+  await page.getByRole("button", { name: "播放当前句" }).click();
+  await expect(page.getByRole("button", { name: "暂停播放" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "听完再标记" })).toBeVisible();
+  await page.getByRole("button", { name: "暂停播放" }).click();
+  await expect(page.getByRole("button", { name: "播放当前句" })).toBeVisible();
+
   await page.getByRole("button", { name: "显示或隐藏原文" }).click();
   await expect(page.locator(".sentence-stage h2")).toContainText("I was going to grab a coffee before the meeting starts.");
 

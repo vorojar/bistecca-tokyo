@@ -43,6 +43,7 @@ export const ICON_PATHS = {
   chart: "M4 19V5M4 19h17M8 16v-5M13 16V8M18 16v-9",
   settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM3 12h2M19 12h2M12 3v2M12 19v2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4",
   play: "M8 5v14l11-7-11-7Z",
+  pause: "M7 5h4v14H7V5ZM13 5h4v14h-4V5Z",
   prev: "M15 18 9 12l6-6M20 18l-6-6 6-6",
   next: "m9 18 6-6-6-6M4 18l6-6-6-6",
   back: "M15 18 9 12l6-6",

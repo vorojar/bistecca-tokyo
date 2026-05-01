@@ -12,6 +12,7 @@ import {
   getSentenceIndex,
   loopState,
   renderContext,
+  renderGlobalPlayer,
   renderOnboarding,
   renderPage,
   renderShell,
@@ -37,6 +38,7 @@ interface AppState extends ViewModel {
   scrollPositions: Record<string, number>;
   touchStart: { x: number; y: number } | null;
   suppressTransition: boolean;
+  activePlayback: { lessonId: string; sentenceId: string } | null;
 }
 
 const state: AppState = {
@@ -67,6 +69,8 @@ const state: AppState = {
   revealByLesson: {},
   loopByLesson: {},
   modeByLesson: {},
+  heardBySentence: {},
+  activePlayback: null,
   dictationText: "",
   dictationResult: null,
   vocabIndex: 0,
@@ -174,17 +178,22 @@ async function renderRoute(): Promise<void> {
   state.previousRoute = state.route;
   state.route = route;
   state.suppressTransition = false;
+  if (state.previousRoute?.name === "train" && route.name !== "train") {
+    stopPlayback();
+  }
   rememberRoute(route);
 
   setActiveNavigation(route.tab);
   const view = $("#view");
   const context = $("#context-panel");
   const modal = $("#modal-root");
-  if (!view || !context || !modal) return;
+  const player = $("#player-root");
+  if (!view || !context || !modal || !player) return;
 
   view.innerHTML = renderPage(route, state);
   context.innerHTML = renderContext(route, state);
   modal.innerHTML = renderOnboarding(state);
+  player.innerHTML = renderGlobalPlayer(route, state);
   renderAppStatus();
   animateView(direction);
   (view as HTMLElement).focus({ preventScroll: true });
@@ -260,12 +269,14 @@ async function onClick(event: MouseEvent): Promise<void> {
   if (action === "set-mode" && lesson) {
     const mode = target.dataset.mode;
     if (mode === "精听" || mode === "跟读") state.modeByLesson[lesson.id] = mode;
+    stopPlayback();
     rerender();
     return;
   }
 
   if (action === "set-sentence" && lesson) {
     state.sentenceIndex[lesson.id] = Number(target.dataset.index || 0);
+    stopPlayback();
     rerender();
     return;
   }
@@ -293,7 +304,7 @@ async function onClick(event: MouseEvent): Promise<void> {
   }
 
   if (action === "play-current" && lesson) {
-    await playCurrent(lesson);
+    void toggleCurrentPlayback(lesson);
     return;
   }
 
@@ -427,7 +438,7 @@ async function onKeydown(event: KeyboardEvent): Promise<void> {
 
   if (event.key === " ") {
     event.preventDefault();
-    await playCurrent(lesson);
+    void toggleCurrentPlayback(lesson);
   }
   if (event.key === "ArrowLeft") shiftSentence(lesson, -1);
   if (event.key === "ArrowRight") shiftSentence(lesson, 1);
@@ -515,17 +526,36 @@ function restoreScrollPosition(route: RouteState): void {
 }
 
 function shiftSentence(lesson: Lesson, delta: number): void {
+  stopPlayback();
   const current = getSentenceIndex(state, lesson);
   state.sentenceIndex[lesson.id] = clamp(current + delta, 0, lesson.sentences.length - 1);
   rerender();
 }
 
-async function playCurrent(lesson: Lesson): Promise<void> {
+function stopPlayback(): void {
+  state.audio.stop();
+  state.activePlayback = null;
+}
+
+async function toggleCurrentPlayback(lesson: Lesson): Promise<void> {
   const index = getSentenceIndex(state, lesson);
   const sentence = lesson.sentences[index];
+  const current = state.activePlayback;
+
+  if (current?.lessonId === lesson.id && current.sentenceId === sentence.id) {
+    stopPlayback();
+    rerender();
+    return;
+  }
+
+  stopPlayback();
+  state.activePlayback = { lessonId: lesson.id, sentenceId: sentence.id };
+  state.heardBySentence[sentence.id] = true;
+  rerender();
+
   await state.audio.playSentence(lesson, sentence, state.settings.defaultRate);
-  if (!loopState(state, lesson) && index < lesson.sentences.length - 1) {
-    state.sentenceIndex[lesson.id] = index + 1;
+  if (state.activePlayback?.lessonId === lesson.id && state.activePlayback.sentenceId === sentence.id) {
+    state.activePlayback = null;
     rerender();
   }
 }

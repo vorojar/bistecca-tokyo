@@ -3,6 +3,8 @@ import type { Accent, Lesson, LessonSentence } from "../types/domain";
 
 export class AudioEngine {
   private currentAudio: HTMLAudioElement | null = null;
+  private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private finishCurrent: (() => void) | null = null;
 
   async playSentence(lesson: Lesson, sentence: LessonSentence, rate: number): Promise<void> {
     if (sentence.audioUrl) {
@@ -17,13 +19,12 @@ export class AudioEngine {
   }
 
   stop(): void {
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio = null;
-    }
-    if ("speechSynthesis" in window) {
+    if (this.currentAudio) this.currentAudio.pause();
+    if (this.currentUtterance && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
+    const finish = this.finishCurrent;
+    if (finish) finish();
   }
 
   private playFile(url: string, rate: number, start?: number, end?: number): Promise<void> {
@@ -38,6 +39,9 @@ export class AudioEngine {
         audio.removeEventListener("ended", cleanup);
         audio.removeEventListener("error", cleanup);
         audio.removeEventListener("timeupdate", stopAtEnd);
+        audio.pause();
+        if (this.currentAudio === audio) this.currentAudio = null;
+        if (this.finishCurrent === cleanup) this.finishCurrent = null;
         resolve();
       };
 
@@ -51,6 +55,7 @@ export class AudioEngine {
       audio.addEventListener("ended", cleanup);
       audio.addEventListener("error", cleanup);
       audio.addEventListener("timeupdate", stopAtEnd);
+      this.finishCurrent = cleanup;
       audio.play().catch(cleanup);
     });
   }
@@ -69,8 +74,17 @@ export class AudioEngine {
       utterance.pitch = 1;
       const voice = pickVoice(utterance.lang);
       if (voice) utterance.voice = voice;
-      utterance.onend = () => resolve();
-      utterance.onerror = () => resolve();
+      const cleanup = (): void => {
+        utterance.onend = null;
+        utterance.onerror = null;
+        if (this.currentUtterance === utterance) this.currentUtterance = null;
+        if (this.finishCurrent === cleanup) this.finishCurrent = null;
+        resolve();
+      };
+      this.currentUtterance = utterance;
+      this.finishCurrent = cleanup;
+      utterance.onend = cleanup;
+      utterance.onerror = cleanup;
       window.speechSynthesis.speak(utterance);
     });
   }

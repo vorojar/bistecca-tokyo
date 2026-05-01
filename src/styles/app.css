@@ -1195,6 +1195,26 @@ h3 {
 .wave span:nth-child(4) { height: 32px; }
 .wave span:nth-child(5) { height: 14px; }
 
+.wave.playing span {
+  animation: wavePulse 0.72s var(--ios) infinite;
+}
+
+.wave.playing span:nth-child(2) { animation-delay: 0.08s; }
+.wave.playing span:nth-child(3) { animation-delay: 0.16s; }
+.wave.playing span:nth-child(4) { animation-delay: 0.24s; }
+.wave.playing span:nth-child(5) { animation-delay: 0.32s; }
+
+@keyframes wavePulse {
+  0%, 100% {
+    opacity: 0.42;
+    transform: scaleY(0.72);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1.18);
+  }
+}
+
 .control-dock {
   display: flex;
   justify-content: center;
@@ -1204,6 +1224,11 @@ h3 {
 
 .mobile-control-bar {
   display: none;
+}
+
+.play-btn.playing {
+  background: var(--green);
+  border-color: var(--green);
 }
 
 .content-grid {
@@ -1216,6 +1241,41 @@ h3 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.diagnosis-copy {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.diagnosis-empty {
+  min-height: 156px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 18px;
+  border: 1px dashed #cfd9df;
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+  color: var(--muted);
+  text-align: center;
+}
+
+.diagnosis-empty .icon {
+  width: 30px;
+  height: 30px;
+  color: var(--green);
+}
+
+.diagnosis-empty strong {
+  color: var(--ink);
+}
+
+.diagnosis-empty span {
+  max-width: 360px;
+  font-size: 13px;
 }
 
 .mark-btn {
@@ -1743,15 +1803,19 @@ h3 {
   }
 
   .train-screen {
-    padding-bottom: calc(78px + var(--safe-bottom));
+    padding-bottom: calc(150px + var(--safe-bottom));
+  }
+
+  .train-screen .panel:last-child {
+    margin-bottom: 88px;
   }
 
   .mobile-control-bar {
     position: fixed;
     left: 10px;
     right: 10px;
-    bottom: calc(70px + var(--safe-bottom));
-    z-index: 50;
+    bottom: calc(76px + var(--safe-bottom));
+    z-index: 70;
     display: flex;
     justify-content: center;
     gap: 8px;
