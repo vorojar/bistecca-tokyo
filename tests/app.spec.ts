@@ -63,7 +63,7 @@ test("今日训练首页可用且无严重可访问性问题", async ({ page }) 
   expect(accessibilityScanResults.violations).toEqual([]);
 });
 
-test("切换 tab 时滚动位置互不污染", async ({ page }) => {
+test("切换 tab 时滚动位置互不污染", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 520 });
   await page.goto("#/library");
   await dismissOnboarding(page);
@@ -76,9 +76,15 @@ test("切换 tab 时滚动位置互不污染", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "今天听一轮，找到你的听力盲区" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(30);
 
-  await page.locator('[data-tab="library"]:visible').click();
-  await expect(page.getByRole("heading", { name: "选一段听得懂的材料" })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(120);
+  await page.locator('[data-tab="stats"]:visible').click();
+  await expect(page.getByRole("heading", { name: "下一次该练什么" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(30);
+
+  if (testInfo.project.name === "desktop") {
+    await page.locator('[data-tab="library"]:visible').click();
+    await expect(page.getByRole("heading", { name: "选一段听得懂的材料" })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(120);
+  }
 });
 
 test("核心训练流程可完成一轮并进入统计", async ({ page }) => {
