@@ -421,6 +421,309 @@ h3 {
   border-left: 1px solid #cfe0d6;
 }
 
+.today-screen {
+  gap: 14px;
+}
+
+.asset-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.asset-card {
+  min-width: 0;
+  min-height: 82px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.asset-icon,
+.choice-icon {
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.asset-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.asset-card strong,
+.asset-card small,
+.asset-card em {
+  display: block;
+}
+
+.asset-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.asset-card em {
+  color: var(--green);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.today-focus {
+  min-height: 410px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  padding: 42px 28px;
+  border: 1px solid #d6e3dc;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #fff 0%, #f4faf7 100%);
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.today-focus h1 {
+  max-width: 720px;
+  margin-bottom: 0;
+}
+
+.today-focus p {
+  max-width: 620px;
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.task-orb {
+  width: 92px;
+  height: 92px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--green);
+  background: var(--panel);
+  box-shadow: 0 18px 45px rgba(45, 123, 101, 0.12);
+}
+
+.task-orb .icon {
+  width: 34px;
+  height: 34px;
+}
+
+.today-actions {
+  width: min(540px, 100%);
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.task-cta,
+.task-secondary {
+  min-height: 54px;
+}
+
+.today-progress-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.compact-title {
+  margin-bottom: 10px;
+}
+
+.today-path {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.path-step {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+.path-step span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.path-step small {
+  color: var(--muted);
+}
+
+.recommended-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 148px;
+  gap: 18px;
+  align-items: center;
+}
+
+.roadmap-details summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+}
+
+.roadmap-details summary span,
+.roadmap-details summary small,
+.roadmap-details summary strong {
+  display: block;
+}
+
+.roadmap-details summary small {
+  color: var(--muted);
+}
+
+.roadmap-details summary > span:last-child {
+  color: var(--green);
+  font-weight: 800;
+}
+
+.onboarding-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(26, 34, 44, 0.54);
+  backdrop-filter: blur(10px);
+}
+
+.onboarding-sheet {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: min(760px, calc(100vh - 36px));
+  overflow: auto;
+  padding: 24px;
+  border-radius: 24px;
+  background: var(--panel);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.22);
+}
+
+.sheet-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.onboarding-sheet > p {
+  color: var(--muted);
+}
+
+.onboarding-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.onboarding-section.compact {
+  margin-top: 14px;
+}
+
+.step-badge {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.choice-grid,
+.time-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.choice-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.choice-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.choice-card,
+.time-choice {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  align-content: center;
+  min-height: 116px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.choice-card.active,
+.time-choice.active {
+  border-color: #91c86f;
+  background: #f4fbef;
+}
+
+.choice-icon {
+  width: 46px;
+  height: 46px;
+}
+
+.choice-card small,
+.time-choice span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.time-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.time-choice {
+  min-height: 72px;
+  text-align: center;
+}
+
+.sheet-cta {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 20px;
+}
+
 .goal-progress-card h2 {
   margin-bottom: 0;
 }
@@ -1310,6 +1613,13 @@ h3 {
   .goal-hero,
   .goal-proof-grid,
   .goal-field-grid,
+  .asset-strip,
+  .today-actions,
+  .today-path,
+  .recommended-panel,
+  .choice-grid.three,
+  .choice-grid.two,
+  .time-grid,
   .hero-card,
   .lesson-card,
   .content-grid,
@@ -1331,6 +1641,55 @@ h3 {
 
   .goal-hero {
     padding: 20px;
+  }
+
+  .asset-card {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .asset-card em {
+    grid-column: 2;
+  }
+
+  .today-focus {
+    min-height: 430px;
+    padding: 30px 20px;
+  }
+
+  .task-orb {
+    width: 82px;
+    height: 82px;
+  }
+
+  .recommended-panel .daily-ring {
+    justify-self: start;
+  }
+
+  .onboarding-layer {
+    align-items: end;
+    padding: 0;
+  }
+
+  .onboarding-sheet {
+    width: 100%;
+    max-height: calc(92vh - var(--safe-bottom));
+    padding: 22px;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .choice-card {
+    min-height: 86px;
+    grid-template-columns: 46px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 12px;
+  }
+
+  .choice-card small {
+    grid-column: 2;
+  }
+
+  .time-choice {
+    min-height: 58px;
   }
 
   .goal-progress-card {

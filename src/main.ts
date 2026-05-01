@@ -12,6 +12,7 @@ import {
   getSentenceIndex,
   loopState,
   renderContext,
+  renderOnboarding,
   renderPage,
   renderShell,
   revealState,
@@ -159,10 +160,12 @@ async function renderRoute(): Promise<void> {
   setActiveNavigation(route.tab);
   const view = $("#view");
   const context = $("#context-panel");
-  if (!view || !context) return;
+  const modal = $("#modal-root");
+  if (!view || !context || !modal) return;
 
   view.innerHTML = renderPage(route, state);
   context.innerHTML = renderContext(route, state);
+  modal.innerHTML = renderOnboarding(state);
   renderAppStatus();
   animateView(direction);
   (view as HTMLElement).focus({ preventScroll: true });
@@ -212,6 +215,21 @@ async function onClick(event: MouseEvent): Promise<void> {
   const action = target.dataset.action;
   const route = parseRoute(state.lastTab).route;
   const lesson = route.id ? findLesson(state.lessons, route.id) : undefined;
+
+  if (action === "set-setting") {
+    const key = target.dataset.setting as keyof UserSettings | undefined;
+    if (key) {
+      await saveSetting(key, coerceSettingValue(key, target.dataset.value || "") as never);
+      rerender();
+    }
+    return;
+  }
+
+  if (action === "dismiss-goal") {
+    await finishGoalSetup("已使用默认路线");
+    rerender();
+    return;
+  }
 
   if (action === "filter-level") {
     state.libraryFilter = target.dataset.level || "全部";
@@ -376,9 +394,8 @@ async function onChange(event: Event): Promise<void> {
   const key = target.dataset.setting as keyof UserSettings | undefined;
   if (!key) return;
 
-  let value: unknown = target instanceof HTMLInputElement && target.type === "checkbox" ? target.checked : target.value;
-  if (key === "dailyGoalMinutes" || key === "defaultRate" || key === "targetHorizonDays") value = Number(value);
-  await saveSetting(key, value as never);
+  const rawValue = target instanceof HTMLInputElement && target.type === "checkbox" ? target.checked : target.value;
+  await saveSetting(key, coerceSettingValue(key, rawValue) as never);
   toast("设置已保存");
   rerender();
 }
@@ -490,14 +507,23 @@ async function saveSetting<K extends keyof UserSettings>(key: K, value: UserSett
   await requireDb().saveSettings(state.settings);
 }
 
+function coerceSettingValue(key: keyof UserSettings, value: unknown): unknown {
+  if (key === "dailyGoalMinutes" || key === "defaultRate" || key === "targetHorizonDays") return Number(value);
+  return value;
+}
+
 async function confirmGoal(): Promise<void> {
+  await finishGoalSetup("今日训练已生成");
+}
+
+async function finishGoalSetup(message: string): Promise<void> {
   state.settings = {
     ...state.settings,
     onboardingComplete: true,
     startedAt: state.settings.startedAt || localDate()
   };
   await requireDb().saveSettings(state.settings);
-  toast("路线已生成");
+  toast(message);
 }
 
 async function toggleMistake(lesson: Lesson, type: string): Promise<void> {

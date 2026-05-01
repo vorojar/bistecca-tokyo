@@ -14,7 +14,6 @@ import type {
   DataSnapshot,
   DictationResult,
   GoalOption,
-  GoalRoadmap,
   Lesson,
   LessonSentence,
   ListeningGoal,
@@ -97,6 +96,7 @@ export function renderShell(): string {
         `).join("")}
       </nav>
     </div>
+    <div id="modal-root"></div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   `;
 }
@@ -179,96 +179,78 @@ function renderToday(model: ViewModel): string {
   const goal = model.settings.dailyGoalMinutes;
   const percent = clamp(Math.round((minutes / goal) * 100), 0, 100);
   const due = dueCards(model).length;
-  const progress = progressMap(model);
   const plan = buildDailyPlan(model);
   const roadmap = buildGoalRoadmap(model);
+  const reviewLessonId = model.snapshot.mistakes.at(-1)?.lessonId || lesson.id;
+  const dictationCount = model.snapshot.attempts.filter((item) => item.mode === "听写").length;
+  const remainingSessions = Math.max(0, Math.ceil(((roadmap.nextMilestone.day * goal) - roadmap.completedMinutes) / Math.max(goal, 1)));
 
   return `
-    <div class="screen">
-      <section class="goal-hero">
-        <div class="goal-copy">
-          <p class="kicker">Listening Roadmap</p>
-          <h1>${html(roadmap.profile.promise)}</h1>
-          <p>${html(roadmap.profile.audience)}</p>
-          <div class="goal-proof-grid">
-            ${goalMetric(`${roadmap.horizonDays} 天`, roadmap.targetDateLabel, "目标日期")}
-            ${goalMetric(`${goal} 分钟`, "每天", "稳定投入")}
-            ${goalMetric(`${roadmap.progressPercent}%`, roadmap.phaseName, "当前进度")}
-          </div>
-          <div class="action-row">
-            <a class="btn primary" href="#/train/${lesson.id}">${icon("play")}开始今天</a>
-            <a class="btn" href="#/settings">调整目标</a>
-          </div>
+    <div class="screen today-screen">
+      <section class="asset-strip" aria-label="学习资产">
+        ${assetShortcut("错句复听", model.snapshot.mistakes.length ? `${model.snapshot.mistakes.length} 句` : "待生成", model.snapshot.mistakes.length ? "把听错的句子重复到能直接懂。" : "完成第一轮后自动收集错句。", `#/train/${reviewLessonId}`, "repeat")}
+        ${assetShortcut("听力词汇", due ? `${due} 张` : "已清空", due ? "先听音，再说出意思。" : "今天没有到期卡片。", "#/vocab", "cards")}
+        ${assetShortcut("听写记录", dictationCount ? `${dictationCount} 次` : "未校准", dictationCount ? "用漏词判断是否升级材料。" : "做一次听写就知道哪里漏。", `#/dictation/${lesson.id}`, "pen")}
+      </section>
+
+      <section class="today-focus">
+        <div class="task-orb" aria-hidden="true">${icon("speaker")}</div>
+        <p class="kicker">Today</p>
+        <h1>今天听一轮，找到你的听力盲区</h1>
+        <p>${html(lesson.title)} · ${html(lesson.level)} · ${lesson.comprehension}% 可懂。做完会得到错句、漏词和下一轮复听重点。</p>
+        <div class="today-actions">
+          <a class="btn primary task-cta" href="#/train/${lesson.id}">${icon("play")}开始 15 分钟精听</a>
+          <a class="btn task-secondary" href="#/dictation/${lesson.id}">${icon("pen")}听写查漏词</a>
         </div>
-        <div class="goal-progress-card">
-          <p class="kicker">Next Milestone</p>
-          <h2>${html(roadmap.nextMilestone.title)}</h2>
-          <p>${html(roadmap.nextMilestone.outcome)}</p>
-          <div class="progress" style="--progress:${roadmap.progressPercent}%"><span></span></div>
-          <small>${html(roadmap.weeklyProof)}</small>
+        <div class="today-progress-line">
+          <span>今日 ${minutes}/${goal} 分钟</span>
+          <span>下一步：${html(roadmap.nextMilestone.title)}</span>
         </div>
       </section>
 
-      ${goalSetupCard(model, roadmap)}
-
-      <section class="panel">
-        <div class="section-title">
+      <section class="panel today-path-panel">
+        <div class="section-title compact-title">
           <div>
-            <p class="kicker">Milestones</p>
-            <h2>你会逐步拿到什么结果</h2>
+            <p class="kicker">Path</p>
+            <h2>今日路径</h2>
           </div>
+          <a class="text-link" href="#/stats">看盲区</a>
         </div>
-        <div class="milestone-list">
-          ${roadmap.milestones.map((item) => milestoneItem(item.day, item.title, item.outcome, item.evidence)).join("")}
+        <div class="today-path">
+          ${plan.map(pathStep).join("")}
         </div>
       </section>
 
-      <section class="hero-card">
-        <div class="hero-copy">
-          <p class="kicker">推荐 · ${html(lesson.level)} · ${html(lesson.accent)}</p>
-          <h2>${html(lesson.title)}</h2>
+      <section class="panel recommended-panel">
+        <div>
+          <p class="kicker">Material</p>
+          <h2>当前推荐：${html(lesson.title)}</h2>
           <p>${html(lesson.summary)}</p>
           <div class="action-row">
-            <a class="btn primary" href="#/train/${lesson.id}">${icon("play")}开始训练</a>
-            <a class="btn" href="#/dictation/${lesson.id}">${icon("pen")}听写</a>
+            <a class="btn primary" href="#/train/${lesson.id}">${icon("play")}精听找盲区</a>
+            <a class="btn" href="#/library">换一段材料</a>
           </div>
         </div>
-        <div class="daily-ring" style="--value:${percent * 3.6}deg">
+        <div class="daily-ring" style="--value:${percent * 3.6}deg" aria-label="今日训练进度">
           <strong>${minutes}</strong>
           <span>/${goal} 分钟</span>
         </div>
       </section>
 
-      <section class="metric-grid">
-        ${metric("连续", `${streakDays(model)} 天`, "每天 30 分钟优先")}
-        ${metric("待复习", `${due} 张`, "先听音再识义")}
-        ${metric("完成", `${model.snapshot.progress.filter((item) => item.completed).length} 篇`, "重复比数量重要")}
-      </section>
-
-      <section class="panel">
-        <div class="section-title">
-          <div>
-            <p class="kicker">Plan</p>
-            <h2>今日 40 分钟计划</h2>
-          </div>
-          <a class="text-link" href="#/stats">看盲区</a>
+      <details class="panel roadmap-details">
+        <summary>
+          <span>
+            <span class="kicker">Goal</span>
+            <strong>你的目标：${roadmap.horizonDays} 天 ${html(roadmap.profile.title)}</strong>
+            <small>距离 ${html(roadmap.nextMilestone.title)}，还差 ${remainingSessions} 次训练。</small>
+          </span>
+          <span>${roadmap.progressPercent}%</span>
+        </summary>
+        <div class="progress large" style="--progress:${roadmap.progressPercent}%"><span></span></div>
+        <div class="milestone-list compact">
+          ${roadmap.milestones.map((item) => milestoneItem(item.day, item.title, item.outcome, item.evidence)).join("")}
         </div>
-        <div class="daily-plan">
-          ${plan.map(planItem).join("")}
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="section-title">
-          <div>
-            <p class="kicker">Materials</p>
-            <h2>候选材料</h2>
-          </div>
-        </div>
-        <div class="plan-list">
-          ${model.lessons.slice(0, 2).map((item) => lessonRow(item, progress.get(item.id))).join("")}
-        </div>
-      </section>
+      </details>
     </div>
   `;
 }
@@ -576,44 +558,59 @@ function metric(label: string, value: string, caption: string): string {
   `;
 }
 
-function goalMetric(label: string, value: string, caption: string): string {
+export function renderOnboarding(model: ViewModel): string {
+  if (model.settings.onboardingComplete) return "";
   return `
-    <article class="goal-metric">
-      <strong>${html(label)}</strong>
-      <span>${html(value)}</span>
-      <small>${html(caption)}</small>
-    </article>
-  `;
-}
+    <section class="onboarding-layer" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+      <div class="onboarding-sheet">
+        <button class="sheet-close" data-action="dismiss-goal" aria-label="稍后再说">${icon("close")}</button>
+        <p class="kicker">Start</p>
+        <h2 id="onboarding-title">先定一个听力目标</h2>
+        <p>告诉我几件事，我会按合适的难度和材料安排训练。</p>
 
-function goalSetupCard(model: ViewModel, roadmap: GoalRoadmap): string {
-  if (model.settings.onboardingComplete) {
-    return `
-      <section class="goal-contract">
-        <span>${html(roadmap.levelLabel)}</span>
-        <strong>${html(roadmap.profile.title)}</strong>
-        <small>每天 ${model.settings.dailyGoalMinutes} 分钟，到 ${html(roadmap.targetDateLabel)} 验收：${html(roadmap.nextMilestone.outcome)}</small>
-      </section>
-    `;
-  }
-
-  return `
-    <section class="panel goal-setup">
-      <div class="section-title">
-        <div>
-          <p class="kicker">Start</p>
-          <h2>先定目标，再开始训练</h2>
-          <p>路线会按你的状态、目标和可投入时间生成，后续统计只看离目标还有多远。</p>
+        <div class="onboarding-section">
+          <span class="step-badge">1</span>
+          <strong>当前状态</strong>
+          <div class="choice-grid three">
+            ${LEARNER_LEVEL_OPTIONS.map((option) => onboardingChoice("learnerLevel", option.value, option.label, option.caption, model.settings.learnerLevel)).join("")}
+          </div>
         </div>
-      </div>
-      <div class="goal-field-grid">
-        ${compactChoice("learnerLevel", "当前状态", model.settings.learnerLevel, LEARNER_LEVEL_OPTIONS)}
-        ${compactChoice("listeningGoal", "训练目标", model.settings.listeningGoal, goalOptions())}
-        ${compactChoice("targetHorizonDays", "目标周期", model.settings.targetHorizonDays, TARGET_HORIZON_OPTIONS)}
-      </div>
-      <div class="action-row">
-        <button class="btn primary" data-action="confirm-goal">${icon("check")}确认我的路线</button>
-        <a class="btn" href="#/settings">更多设置</a>
+
+        <div class="onboarding-section">
+          <span class="step-badge">2</span>
+          <strong>训练目标</strong>
+          <div class="choice-grid two">
+            ${goalOptions().map((option) => onboardingChoice("listeningGoal", option.value, option.label, option.caption, model.settings.listeningGoal)).join("")}
+          </div>
+        </div>
+
+        <div class="onboarding-section">
+          <span class="step-badge">3</span>
+          <strong>每天时间</strong>
+          <div class="time-grid">
+            ${[20, 30, 45, 60].map((minutes) => `
+              <button class="time-choice ${model.settings.dailyGoalMinutes === minutes ? "active" : ""}" data-action="set-setting" data-setting="dailyGoalMinutes" data-value="${minutes}">
+                <strong>${minutes}</strong>
+                <span>分钟</span>
+              </button>
+            `).join("")}
+          </div>
+        </div>
+
+        <div class="onboarding-section compact">
+          <span class="step-badge">4</span>
+          <strong>目标周期</strong>
+          <div class="time-grid">
+            ${TARGET_HORIZON_OPTIONS.map((option) => `
+              <button class="time-choice ${model.settings.targetHorizonDays === option.value ? "active" : ""}" data-action="set-setting" data-setting="targetHorizonDays" data-value="${option.value}">
+                <strong>${option.label}</strong>
+                <span>${html(option.caption)}</span>
+              </button>
+            `).join("")}
+          </div>
+        </div>
+
+        <button class="btn primary sheet-cta" data-action="confirm-goal">${icon("check")}生成今日训练</button>
       </div>
     </section>
   `;
@@ -632,29 +629,58 @@ function milestoneItem(day: number, title: string, outcome: string, evidence: st
   `;
 }
 
-function planItem(item: DailyPlanItem): string {
+function pathStep(item: DailyPlanItem): string {
   return `
-    <a class="plan-step" href="${item.href}">
-      <span>${item.minutes}</span>
-      <strong>${html(item.title)}</strong>
-      <small>${html(item.mode)} · ${html(item.reason)}</small>
+    <a class="path-step" href="${item.href}">
+      <span>${item.minutes}m</span>
+      <strong>${html(shortPlanTitle(item))}</strong>
+      <small>${html(planOutcome(item))}</small>
     </a>
   `;
 }
 
-function lessonRow(lesson: Lesson, progress: { completedSentences: number } | undefined): string {
-  const done = progress ? clamp(Math.round((progress.completedSentences / lesson.sentences.length) * 100), 0, 100) : 0;
+function shortPlanTitle(item: DailyPlanItem): string {
+  if (item.id === "review") return "错句复听";
+  if (item.id === "intensive") return "精听";
+  if (item.id === "shadow") return "跟读";
+  return "词汇";
+}
+
+function planOutcome(item: DailyPlanItem): string {
+  if (item.id === "review") return "热身旧盲区";
+  if (item.id === "intensive") return "找听不出的句子";
+  if (item.id === "shadow") return "修正节奏弱读";
+  return "听音识义";
+}
+
+function assetShortcut(title: string, value: string, caption: string, href: string, iconName: "repeat" | "cards" | "pen"): string {
   return `
-    <article class="lesson-row">
-      <div>
-        <h3>${html(lesson.title)}</h3>
-        <p>${html(lesson.series)} · ${html(lesson.level)} · ${formatDuration(lesson.duration)} · 可懂度 ${lesson.comprehension}%</p>
-        <div class="tag-row">${lesson.focus.map((item) => `<span class="tag">${html(item)}</span>`).join("")}</div>
-        <div class="progress" style="--progress:${done}%"><span></span></div>
-      </div>
-      <a class="icon-btn filled" href="#/train/${lesson.id}" aria-label="训练 ${attr(lesson.title)}">${icon("play")}</a>
-    </article>
+    <a class="asset-card" href="${href}">
+      <span class="asset-icon">${icon(iconName)}</span>
+      <span>
+        <strong>${html(title)}</strong>
+        <small>${html(caption)}</small>
+      </span>
+      <em>${html(value)}</em>
+    </a>
   `;
+}
+
+function onboardingChoice<T extends string>(key: string, value: T, label: string, caption: string, current: T): string {
+  return `
+    <button class="choice-card ${value === current ? "active" : ""}" data-action="set-setting" data-setting="${key}" data-value="${attr(value)}">
+      <span class="choice-icon">${icon(choiceIcon(value))}</span>
+      <strong>${html(label)}</strong>
+      <small>${html(caption)}</small>
+    </button>
+  `;
+}
+
+function choiceIcon(value: string): "today" | "library" | "speaker" | "chart" {
+  if (value === "foundation" || value === "daily") return "today";
+  if (value === "reader" || value === "shows") return "library";
+  if (value === "work") return "chart";
+  return "speaker";
 }
 
 function libraryCard(lesson: Lesson, progress: { completedSentences: number } | undefined): string {
@@ -675,8 +701,8 @@ function libraryCard(lesson: Lesson, progress: { completedSentences: number } | 
         <div class="progress" style="--progress:${done}%"><span></span></div>
       </div>
       <div class="card-actions">
-        <a class="btn primary" href="#/train/${lesson.id}">${icon("play")}精听</a>
-        <a class="btn" href="#/dictation/${lesson.id}">${icon("pen")}听写</a>
+        <a class="btn primary" href="#/train/${lesson.id}">${icon("play")}精听找盲区</a>
+        <a class="btn" href="#/dictation/${lesson.id}">${icon("pen")}听写查漏词</a>
       </div>
     </article>
   `;
@@ -746,17 +772,6 @@ function settingChoice<T extends string | number>(key: string, title: string, ca
   return `
     <label class="setting-row">
       <span><strong>${html(title)}</strong><small>${html(caption)}</small></span>
-      <select class="field" data-setting="${key}">
-        ${options.map((option) => `<option value="${attr(option.value)}" ${option.value === value ? "selected" : ""}>${html(option.label)}</option>`).join("")}
-      </select>
-    </label>
-  `;
-}
-
-function compactChoice<T extends string | number>(key: string, title: string, value: T, options: GoalOption<T>[]): string {
-  return `
-    <label class="compact-choice">
-      <span>${html(title)}</span>
       <select class="field" data-setting="${key}">
         ${options.map((option) => `<option value="${attr(option.value)}" ${option.value === value ? "selected" : ""}>${html(option.label)}</option>`).join("")}
       </select>
@@ -854,16 +869,6 @@ export function mistakeDistribution(model: ViewModel): { total: number; items: {
       .map(([type, count]) => ({ type, count, percent: total ? Math.round((count / total) * 100) : 0 }))
       .sort((a, b) => b.count - a.count)
   };
-}
-
-function streakDays(model: ViewModel): number {
-  const dates = new Set(model.snapshot.attempts.map((item) => item.date));
-  let streak = 0;
-  for (let offset = 0; offset < 365; offset += 1) {
-    if (!dates.has(currentLocalDate(-offset))) break;
-    streak += 1;
-  }
-  return streak;
 }
 
 function currentLocalDate(offset = 0): string {
