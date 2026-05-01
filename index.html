@@ -1,200 +1,23 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>BISTECCA | 本格トスカーナ・ステーキハウス 東京</title>
-<meta name="description" content="トスカーナの伝統を受け継ぐフィレンツェ風ビステッカ。厳選された熟成肉と、薪火で焼き上げる本物の味を東京・銀座で。" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Auralift | 英语听力训练</title>
+<meta name="description" content="基于精听、跟读、听写和可理解输入的英语听力训练应用。" />
+<meta name="theme-color" content="#f7f4ee" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Noto+Serif+JP:wght@400;500;600;700&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet" />
-<style>
-:root{--bg:#15100c;--bg-2:#1d1612;--ink:#efe7dc;--ink-dim:#b4a799;--gold:#d4a05a;--gold-2:#b7863d;--line:rgba(212,160,90,.25);--card:#1c1511}
-*{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--ink);font-family:'Noto Sans JP','Noto Serif JP',sans-serif;font-weight:300;line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-a{color:inherit;text-decoration:none}img{display:block;max-width:100%}
-body::before{content:"";position:fixed;inset:0;background:radial-gradient(1200px 600px at 15% 0%,rgba(212,160,90,.08),transparent 60%),radial-gradient(900px 500px at 90% 100%,rgba(183,134,61,.06),transparent 60%);pointer-events:none;z-index:0}
-header{position:fixed;top:0;left:0;right:0;z-index:50;padding:20px 48px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to bottom,rgba(21,16,12,.9),rgba(21,16,12,.4));backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.logo{display:flex;flex-direction:column;line-height:1}
-.logo .name{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:24px;letter-spacing:.35em;color:var(--gold)}
-.logo .sub{font-family:'Cormorant Garamond',serif;font-size:10px;letter-spacing:.4em;color:var(--ink-dim);margin-top:4px}
-nav{display:flex;align-items:center;gap:36px;font-family:'Noto Serif JP',serif;font-size:13px;letter-spacing:.1em}
-nav a{color:var(--ink);transition:color .2s}nav a:hover{color:var(--gold)}
-nav .cta{padding:10px 22px;border:1px solid var(--gold);color:var(--gold);transition:all .25s}
-nav .cta:hover{background:var(--gold);color:var(--bg)}
-.burger{display:none}
-.hero{position:relative;min-height:100vh;display:flex;align-items:center;padding:120px 48px 80px;background:linear-gradient(90deg,rgba(21,16,12,.92) 0%,rgba(21,16,12,.55) 45%,rgba(21,16,12,.15) 100%),url("https://images.unsplash.com/photo-1558030006-450675393462?auto=format&fit=crop&w=1920&q=80") center/cover no-repeat}
-.hero::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 70% 50%,transparent 0%,rgba(21,16,12,.5) 100%);pointer-events:none}
-.hero-inner{position:relative;z-index:2;max-width:1280px;margin:0 auto;width:100%}
-.eyebrow{font-family:'Cormorant Garamond',serif;font-style:italic;color:var(--gold);letter-spacing:.3em;text-transform:uppercase;font-size:13px;margin-bottom:28px}
-.hero h1{font-family:'Noto Serif JP',serif;font-weight:600;font-size:clamp(38px,6vw,72px);line-height:1.3;letter-spacing:.04em;color:var(--ink);text-shadow:0 2px 20px rgba(0,0,0,.6)}
-.hero p.lead{margin-top:32px;max-width:540px;font-size:15px;color:var(--ink-dim);line-height:2}
-.hero-actions{margin-top:44px;display:flex;gap:18px;flex-wrap:wrap}
-.btn{display:inline-block;padding:16px 36px;font-family:'Noto Serif JP',serif;font-size:13px;letter-spacing:.2em;border:1px solid var(--gold);color:var(--gold);background:transparent;cursor:pointer;transition:all .25s}
-.btn:hover{background:var(--gold);color:var(--bg)}
-.btn.primary{background:var(--gold);color:var(--bg)}
-.btn.primary:hover{background:var(--gold-2);border-color:var(--gold-2)}
-section{position:relative;z-index:1}
-.container{max-width:1200px;margin:0 auto;padding:0 48px}
-.section-head{text-align:center;margin-bottom:64px}
-.section-head .eyebrow{text-align:center}
-.section-head h2{font-family:'Noto Serif JP',serif;font-weight:500;font-size:clamp(28px,3.5vw,40px);letter-spacing:.15em;color:var(--ink)}
-.section-head h2 .en{display:block;font-family:'Cormorant Garamond',serif;font-style:italic;font-size:15px;letter-spacing:.3em;color:var(--gold);margin-top:10px;font-weight:400}
-.divider{width:48px;height:1px;background:var(--gold);margin:20px auto 0}
-.about{padding:120px 0;background:var(--bg-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center}
-.about-copy h3{font-family:'Noto Serif JP',serif;font-weight:500;font-size:26px;line-height:1.6;letter-spacing:.08em;margin-bottom:32px}
-.about-copy p{color:var(--ink-dim);font-size:15px;line-height:2.1;margin-bottom:24px}
-.about-copy .btn{margin-top:16px}
-.about-photo{position:relative;aspect-ratio:4/5;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5)}
-.about-photo::before{content:"";position:absolute;inset:0;background:url("https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1000&q=80") center/cover no-repeat;transition:transform .8s}
-.about-photo:hover::before{transform:scale(1.06)}
-.about-photo .mark{position:absolute;bottom:28px;right:28px;font-family:'Cormorant Garamond',serif;font-size:28px;letter-spacing:.25em;color:var(--gold);background:rgba(21,16,12,.7);padding:14px 22px;backdrop-filter:blur(4px)}
-.menu{padding:120px 0;background:var(--bg)}
-.menu-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:28px}
-.dish{background:var(--card);border:1px solid var(--line);transition:transform .3s,border-color .3s;overflow:hidden}
-.dish:hover{transform:translateY(-6px);border-color:var(--gold)}
-.dish-img{aspect-ratio:4/3;background-size:cover;background-position:center}
-.d1 .dish-img{background-image:url("https://images.unsplash.com/photo-1558030006-450675393462?auto=format&fit=crop&w=800&q=80")}
-.d2 .dish-img{background-image:url("https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=800&q=80")}
-.d3 .dish-img{background-image:url("https://images.unsplash.com/photo-1626200926749-2c75673a72ab?auto=format&fit=crop&w=800&q=80")}
-.d4 .dish-img{background-image:url("https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=800&q=80")}
-.dish-body{padding:24px 22px 26px}
-.dish-cat{font-family:'Cormorant Garamond',serif;font-style:italic;color:var(--gold);font-size:12px;letter-spacing:.25em;text-transform:uppercase}
-.dish h4{font-family:'Noto Serif JP',serif;font-weight:500;font-size:17px;letter-spacing:.06em;margin:10px 0}
-.dish p{font-size:13px;color:var(--ink-dim);line-height:1.8}
-.menu-more{text-align:center;margin-top:56px}
-.info{padding:120px 0;background:var(--bg-2);border-top:1px solid var(--line)}
-.info-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:60px}
-.info dl{display:grid;grid-template-columns:120px 1fr;row-gap:22px;column-gap:20px;font-size:14px}
-.info dt{font-family:'Noto Serif JP',serif;color:var(--gold);letter-spacing:.15em;border-right:1px solid var(--line);padding-right:20px}
-.info dd{color:var(--ink-dim);line-height:1.9}
-.info dd strong{color:var(--ink);font-weight:500;display:block;margin-bottom:4px}
-.map-wrap{position:relative;min-height:380px;background:#0c0906 url("https://images.unsplash.com/photo-1524813686514-a57563d77965?auto=format&fit=crop&w=1200&q=80") center/cover no-repeat;overflow:hidden}
-.map-wrap::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(21,16,12,.7),rgba(21,16,12,.3))}
-.map-pin{position:absolute;z-index:2;top:45%;left:50%;transform:translate(-50%,-50%);width:18px;height:18px;background:var(--gold);border-radius:50%;box-shadow:0 0 0 8px rgba(212,160,90,.25),0 0 0 20px rgba(212,160,90,.12);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 8px rgba(212,160,90,.25),0 0 0 20px rgba(212,160,90,.12)}50%{box-shadow:0 0 0 12px rgba(212,160,90,.35),0 0 0 28px rgba(212,160,90,.08)}}
-.map-link{position:absolute;z-index:3;bottom:24px;left:24px;background:rgba(21,16,12,.85);padding:12px 20px;font-size:12px;letter-spacing:.15em;border:1px solid var(--line);color:var(--gold)}
-footer{padding:60px 48px 40px;background:var(--bg);border-top:1px solid var(--line);text-align:center}
-footer .flogo{font-family:'Cormorant Garamond',serif;letter-spacing:.4em;font-size:20px;color:var(--gold);margin-bottom:16px}
-footer p{font-size:12px;color:var(--ink-dim);letter-spacing:.1em}
-footer .links{margin:22px 0;display:flex;justify-content:center;gap:30px;font-size:12px;letter-spacing:.2em}
-footer .links a{color:var(--ink-dim);transition:color .2s}
-footer .links a:hover{color:var(--gold)}
-@media (max-width:900px){
-header{padding:16px 20px}
-nav{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:var(--bg-2);border-bottom:1px solid var(--line);padding:20px 0}
-nav.open{display:flex}nav a{padding:12px 24px;width:100%}
-nav .cta{margin:12px 24px;text-align:center}
-.burger{display:flex;flex-direction:column;gap:5px;background:transparent;border:0;cursor:pointer;padding:8px}
-.burger span{width:24px;height:1px;background:var(--gold)}
-.hero{padding:120px 24px 60px}
-.container{padding:0 24px}
-.about,.menu,.info{padding:80px 0}
-.about-grid{grid-template-columns:1fr;gap:40px}
-.menu-grid{grid-template-columns:repeat(2,1fr);gap:16px}
-.info-grid{grid-template-columns:1fr;gap:40px}
-.info dl{grid-template-columns:90px 1fr}
-}
-@media (max-width:480px){.menu-grid{grid-template-columns:1fr}.hero h1{font-size:34px}}
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles/app.css" />
 </head>
 <body>
-<header>
-<a href="#top" class="logo"><span class="name">BISTECCA</span><span class="sub">RISTORANTE &middot; TOKYO</span></a>
-<nav id="nav">
-<a href="#about">私たちについて</a>
-<a href="#menu">メニュー</a>
-<a href="#info">店舗情報</a>
-<a href="#reservation" class="cta">ご予約はこちら</a>
-</nav>
-<button class="burger" aria-label="menu" onclick="document.getElementById('nav').classList.toggle('open')"><span></span><span></span><span></span></button>
-</header>
-<section id="top" class="hero">
-<div class="hero-inner">
-<div class="eyebrow">Autentica cucina toscana</div>
-<h1>本場トスカーナの<br/>伝統を、東京で。</h1>
-<p class="lead">イタリア中部トスカーナ地方に伝わる炭火焼きの芸術「ビステッカ・アッラ・フィオレンティーナ」。熟成を重ねたキアニーナ牛を、薪火の力だけで豪快に焼き上げる。一皿に宿るのは、八百年変わらぬ、食卓の誇り。</p>
-<div class="hero-actions">
-<a href="#reservation" class="btn primary">ご予約はこちら</a>
-<a href="#menu" class="btn">メニューを見る</a>
+<div id="app" class="app-shell" aria-live="polite">
+<div class="boot-screen">
+<div class="boot-mark">A</div>
+<p>正在准备今日训练</p>
 </div>
 </div>
-</section>
-<section id="about" class="about">
-<div class="container about-grid">
-<div class="about-copy">
-<div class="eyebrow">About</div>
-<h3>BISTECCAについて</h3>
-<p>シェフ山岡が学び抜いたトスカーナの伝統を、東京・銀座の片隅で。イタリアでの修行時代に出会った本物の味を、日本の食材と共に再構築しました。時間をかけて熟成させた最上級のキアニーナ牛、薪火の香り、そして一皿ごとの静かな物語。</p>
-<p>カウンター席からは、立ち上る炎と共に、肉を焼く職人の手技をご覧いただけます。訪れる夜ごとに異なる、一期一会の晩餐を。</p>
-<a href="#info" class="btn">私たちについて</a>
-</div>
-<div class="about-photo"><div class="mark">BISTECCA</div></div>
-</div>
-</section>
-<section id="menu" class="menu">
-<div class="container">
-<div class="section-head">
-<div class="eyebrow">Menu</div>
-<h2>メニューのご紹介<span class="en">Our Signature Dishes</span></h2>
-<div class="divider"></div>
-</div>
-<div class="menu-grid">
-<article class="dish d1"><div class="dish-img" role="img" aria-label="フィオレンティーナ・ステーキ"></div><div class="dish-body"><div class="dish-cat">Carne</div><h4>フィオレンティーナ・ステーキ</h4><p>薪火でじっくり焼き上げる、当店の看板メニュー。熟成キアニーナ牛本来の旨みを。</p></div></article>
-<article class="dish d2"><div class="dish-img" role="img" aria-label="白海老のタリオリーニ"></div><div class="dish-body"><div class="dish-cat">Pasta</div><h4>白海老のタリオリーニ</h4><p>富山湾直送の白海老と、自家製の細麺パスタをオリーブオイルで絡めた一皿。</p></div></article>
-<article class="dish d3"><div class="dish-img" role="img" aria-label="厳選ミートのカルパッチョ"></div><div class="dish-body"><div class="dish-cat">Antipasto</div><h4>厳選ミートのカルパッチョ</h4><p>トリュフオイルと薄く削ったパルミジャーノで仕立てる、前菜の定番。</p></div></article>
-<article class="dish d4"><div class="dish-img" role="img" aria-label="自家製ティラミス"></div><div class="dish-body"><div class="dish-cat">Dolce</div><h4>自家製ティラミス</h4><p>マスカルポーネとエスプレッソ、レディースフィンガーが織りなす、余韻の一皿。</p></div></article>
-</div>
-<div class="menu-more"><a href="#reservation" class="btn">メニュー一覧を見る</a></div>
-</div>
-</section>
-<section id="info" class="info">
-<div class="container">
-<div class="section-head">
-<div class="eyebrow">Access</div>
-<h2>店舗情報<span class="en">Store Information</span></h2>
-<div class="divider"></div>
-</div>
-<div class="info-grid">
-<dl>
-<dt>住所</dt><dd><strong>BISTECCA 銀座本店</strong>東京都中央区銀座5-10-4<br/>サンライズビル 2F</dd>
-<dt>電話</dt><dd>03-1234-5678</dd>
-<dt>営業時間</dt><dd>ランチ 11:30 – 14:30 (L.O. 14:00)<br/>ディナー 17:30 – 23:00 (L.O. 22:00)</dd>
-<dt>定休日</dt><dd>月曜日・第3火曜日</dd>
-<dt>アクセス</dt><dd>東京メトロ銀座線「銀座駅」A5出口より徒歩3分</dd>
-</dl>
-<div class="map-wrap" aria-label="store map">
-<div class="map-pin"></div>
-<a class="map-link" href="https://maps.google.com/?q=Ginza+5-10-4+Tokyo" target="_blank" rel="noopener">Googleマップで見る &rarr;</a>
-</div>
-</div>
-</div>
-</section>
-<section id="reservation" style="padding:100px 24px;text-align:center;background:var(--bg);">
-<div class="container">
-<div class="eyebrow">Reservation</div>
-<h2 style="font-family:'Noto Serif JP',serif;font-weight:500;font-size:clamp(26px,3vw,36px);letter-spacing:.15em;margin-top:12px;">ご予約・お問い合わせ</h2>
-<div class="divider"></div>
-<p style="color:var(--ink-dim);max-width:560px;margin:30px auto 40px;line-height:2;">お電話またはオンライン予約システムより承ります。<br/>特別な記念日には、コースのカスタマイズも承っておりますので、お気軽にご相談ください。</p>
-<div class="hero-actions" style="justify-content:center;">
-<a href="tel:03-1234-5678" class="btn primary">お電話で予約 &middot; 03-1234-5678</a>
-<a href="#" class="btn">オンライン予約</a>
-</div>
-</div>
-</section>
-<footer>
-<div class="flogo">BISTECCA</div>
-<div class="links">
-<a href="#about">About</a><a href="#menu">Menu</a><a href="#info">Access</a><a href="#reservation">Reservation</a>
-</div>
-<p>&copy; 2026 BISTECCA Ristorante Tokyo. All rights reserved.</p>
-</footer>
-<script>
-const header=document.querySelector('header');
-window.addEventListener('scroll',()=>{header.style.background=window.scrollY>40?'rgba(21,16,12,.95)':'linear-gradient(to bottom,rgba(21,16,12,.9),rgba(21,16,12,.4))';});
-document.querySelectorAll('#nav a').forEach(a=>a.addEventListener('click',()=>document.getElementById('nav').classList.remove('open')));
-</script>
+<script type="module" src="scripts/app.js"></script>
 </body>
 </html>

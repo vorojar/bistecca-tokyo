@@ -1,0 +1,224 @@
+{
+  "lessons": [
+    {
+      "id": "coffee-chat-b1",
+      "title": "A Short Coffee Chat",
+      "series": "Daily Life",
+      "level": "B1",
+      "accent": "US",
+      "duration": 420,
+      "comprehension": 82,
+      "recommendedMode": "精听",
+      "topic": "生活对话",
+      "summary": "两位同事在咖啡店讨论工作节奏、休息和周末计划。",
+      "focus": ["弱读", "连读", "熟词听不出"],
+      "sentences": [
+        {
+          "id": "coffee-chat-b1-s1",
+          "text": "I was going to grab a coffee before the meeting starts.",
+          "meaning": "我打算在会议开始前买杯咖啡。",
+          "note": "was going to 常被弱读成 /wəz gənə/。",
+          "keywords": ["grab", "meeting"]
+        },
+        {
+          "id": "coffee-chat-b1-s2",
+          "text": "Do you want me to get you anything?",
+          "meaning": "你要我帮你带点什么吗？",
+          "note": "want me to 在自然语速中会连成一串。",
+          "keywords": ["anything"]
+        },
+        {
+          "id": "coffee-chat-b1-s3",
+          "text": "Just a small latte would be great, thanks.",
+          "meaning": "一小杯拿铁就很好，谢谢。",
+          "note": "would be 的 /d/ 和 /b/ 容易被吞掉。",
+          "keywords": ["latte"]
+        },
+        {
+          "id": "coffee-chat-b1-s4",
+          "text": "I have been trying to cut down on sugar this week.",
+          "meaning": "这周我一直在努力减少糖分摄入。",
+          "note": "trying to 常弱读成 /traɪnə/。",
+          "keywords": ["cut down", "sugar"]
+        },
+        {
+          "id": "coffee-chat-b1-s5",
+          "text": "That sounds hard when the office keeps ordering snacks.",
+          "meaning": "办公室总是在订零食，这听起来挺难的。",
+          "note": "keeps ordering 中的 /s/ 与元音连接。",
+          "keywords": ["snacks"]
+        },
+        {
+          "id": "coffee-chat-b1-s6",
+          "text": "I know, but I sleep better when I eat lighter at night.",
+          "meaning": "我知道，但晚上吃清淡点我睡得更好。",
+          "note": "eat lighter at night 有多处连读。",
+          "keywords": ["lighter"]
+        }
+      ],
+      "vocab": [
+        {"term": "grab", "meaning": "顺手买、拿", "example": "I was going to grab a coffee."},
+        {"term": "cut down on", "meaning": "减少", "example": "I have been trying to cut down on sugar."},
+        {"term": "snacks", "meaning": "零食", "example": "The office keeps ordering snacks."}
+      ]
+    },
+    {
+      "id": "weekend-plans-b1",
+      "title": "Weekend Plans",
+      "series": "Daily Life",
+      "level": "B1",
+      "accent": "UK",
+      "duration": 480,
+      "comprehension": 78,
+      "recommendedMode": "跟读",
+      "topic": "周末安排",
+      "summary": "朋友之间讨论周末短途旅行、天气和改签计划。",
+      "focus": ["英音", "语调", "连读"],
+      "sentences": [
+        {
+          "id": "weekend-plans-b1-s1",
+          "text": "We are thinking of taking the train to Brighton on Saturday.",
+          "meaning": "我们正在考虑周六坐火车去布莱顿。",
+          "note": "thinking of 中 /ŋ/ 到元音自然连接。",
+          "keywords": ["Brighton", "train"]
+        },
+        {
+          "id": "weekend-plans-b1-s2",
+          "text": "If the weather holds up, we might stay for dinner.",
+          "meaning": "如果天气撑得住，我们可能会留下吃晚饭。",
+          "note": "holds up 是连读重点。",
+          "keywords": ["holds up"]
+        },
+        {
+          "id": "weekend-plans-b1-s3",
+          "text": "Have you checked whether the late trains are still running?",
+          "meaning": "你查过晚班火车是否还在运行吗？",
+          "note": "checked whether 中 /t/ 容易弱化。",
+          "keywords": ["late trains"]
+        },
+        {
+          "id": "weekend-plans-b1-s4",
+          "text": "Not yet, but I can look it up after lunch.",
+          "meaning": "还没有，但我午饭后可以查一下。",
+          "note": "look it up 三词连续连接。",
+          "keywords": ["look up"]
+        },
+        {
+          "id": "weekend-plans-b1-s5",
+          "text": "Let us book flexible tickets just in case.",
+          "meaning": "我们订可改签票吧，以防万一。",
+          "note": "just in case 常整体听成一块。",
+          "keywords": ["flexible", "just in case"]
+        }
+      ],
+      "vocab": [
+        {"term": "hold up", "meaning": "维持、撑住", "example": "If the weather holds up, we might stay."},
+        {"term": "look up", "meaning": "查询", "example": "I can look it up after lunch."},
+        {"term": "just in case", "meaning": "以防万一", "example": "Book flexible tickets just in case."}
+      ]
+    },
+    {
+      "id": "product-update-b2",
+      "title": "A Product Update",
+      "series": "Work English",
+      "level": "B2",
+      "accent": "US",
+      "duration": 540,
+      "comprehension": 69,
+      "recommendedMode": "听写",
+      "topic": "工作会议",
+      "summary": "产品经理汇报发布节奏、用户反馈和下一步计划。",
+      "focus": ["真实语速", "商务词汇", "弱读"],
+      "sentences": [
+        {
+          "id": "product-update-b2-s1",
+          "text": "The rollout went smoothly, but support tickets picked up on Tuesday.",
+          "meaning": "发布过程很顺利，但周二支持工单增多了。",
+          "note": "picked up on Tuesday 有连续爆破和连读。",
+          "keywords": ["rollout", "support tickets"]
+        },
+        {
+          "id": "product-update-b2-s2",
+          "text": "Most of the issues came from users who skipped the onboarding flow.",
+          "meaning": "大多数问题来自跳过引导流程的用户。",
+          "note": "most of the 在自然语速中弱读明显。",
+          "keywords": ["onboarding flow"]
+        },
+        {
+          "id": "product-update-b2-s3",
+          "text": "We should make the first step shorter and move the tips into context.",
+          "meaning": "我们应该缩短第一步，把提示移到上下文里。",
+          "note": "should make 与 first step 的辅音组合需要重点听。",
+          "keywords": ["context"]
+        },
+        {
+          "id": "product-update-b2-s4",
+          "text": "I will send a revised prototype before the design review tomorrow.",
+          "meaning": "我会在明天设计评审前发一个修改版原型。",
+          "note": "revised prototype 的重音位置影响理解。",
+          "keywords": ["revised", "prototype"]
+        },
+        {
+          "id": "product-update-b2-s5",
+          "text": "After that, we can run another test with the new copy.",
+          "meaning": "之后我们可以用新的文案再跑一次测试。",
+          "note": "run another test 中 run another 连读明显。",
+          "keywords": ["copy"]
+        }
+      ],
+      "vocab": [
+        {"term": "rollout", "meaning": "发布、上线", "example": "The rollout went smoothly."},
+        {"term": "onboarding", "meaning": "新手引导", "example": "Users skipped the onboarding flow."},
+        {"term": "prototype", "meaning": "原型", "example": "I will send a revised prototype."}
+      ]
+    },
+    {
+      "id": "news-brief-b2",
+      "title": "Morning News Brief",
+      "series": "News",
+      "level": "B2",
+      "accent": "AU",
+      "duration": 510,
+      "comprehension": 64,
+      "recommendedMode": "泛听",
+      "topic": "新闻摘要",
+      "summary": "一段关于交通、天气和城市活动的简短新闻摘要。",
+      "focus": ["澳音", "信息密度", "数字"],
+      "sentences": [
+        {
+          "id": "news-brief-b2-s1",
+          "text": "Morning commuters should expect delays across the northern line.",
+          "meaning": "早高峰通勤者应预计北线会有延误。",
+          "note": "commuters 与 delays 是信息词。",
+          "keywords": ["commuters", "delays"]
+        },
+        {
+          "id": "news-brief-b2-s2",
+          "text": "Engineers are repairing signal equipment near Central Station.",
+          "meaning": "工程师正在中央车站附近维修信号设备。",
+          "note": "repairing signal equipment 信息密度较高。",
+          "keywords": ["signal equipment"]
+        },
+        {
+          "id": "news-brief-b2-s3",
+          "text": "The weather bureau says showers will clear by early afternoon.",
+          "meaning": "气象局表示阵雨将在下午早些时候结束。",
+          "note": "bureau 的发音容易误判。",
+          "keywords": ["bureau", "showers"]
+        },
+        {
+          "id": "news-brief-b2-s4",
+          "text": "A free music festival opens tonight along the riverfront.",
+          "meaning": "一场免费音乐节今晚将在河滨开幕。",
+          "note": "opens tonight along 有多处连读。",
+          "keywords": ["riverfront"]
+        }
+      ],
+      "vocab": [
+        {"term": "commuter", "meaning": "通勤者", "example": "Morning commuters should expect delays."},
+        {"term": "bureau", "meaning": "局、办事处", "example": "The weather bureau says showers will clear."},
+        {"term": "riverfront", "meaning": "河滨地区", "example": "The festival opens along the riverfront."}
+      ]
+    }
+  ]
+}
