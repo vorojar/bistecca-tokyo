@@ -2,15 +2,15 @@ import "./styles/app.css";
 import { AudioEngine } from "./core/audio";
 import { MISTAKE_TYPES } from "./core/config";
 import { openListeningDb, type ListeningDb } from "./core/db";
+import { nextReview, scoreDictation } from "./core/learning";
 import { parseRoute, transitionDirection } from "./core/router";
-import { $, $$, clamp, downloadJson, localDate, normalizeWords, readJsonFile, slugify } from "./core/utils";
+import { $, $$, clamp, downloadJson, localDate, readJsonFile, slugify } from "./core/utils";
 import {
   dictationTarget,
   dueCards,
   findLesson,
   getSentenceIndex,
   loopState,
-  nextDueDate,
   renderContext,
   renderPage,
   renderShell,
@@ -32,6 +32,8 @@ interface AppState extends ViewModel {
   route: RouteState | null;
   previousRoute: RouteState | null;
   lastTab: string;
+  tabStacks: Record<string, string>;
+  touchStart: { x: number; y: number } | null;
   suppressTransition: boolean;
 }
 
@@ -56,6 +58,14 @@ const state: AppState = {
   route: null,
   previousRoute: null,
   lastTab: "today",
+  tabStacks: {
+    today: "#/today",
+    library: "#/library",
+    vocab: "#/vocab",
+    stats: "#/stats",
+    settings: "#/settings"
+  },
+  touchStart: null,
   libraryFilter: "全部",
   sentenceIndex: {},
   revealByLesson: {},
@@ -65,6 +75,8 @@ const state: AppState = {
   dictationResult: null,
   vocabIndex: 0,
   vocabRevealed: false,
+  online: navigator.onLine,
+  updateReady: false,
   suppressTransition: false
 };
 
@@ -124,6 +136,10 @@ function bindEvents(): void {
   document.addEventListener("input", onInput);
   document.addEventListener("change", (event) => void onChange(event));
   window.addEventListener("keydown", (event) => void onKeydown(event));
+  window.addEventListener("online", () => updateNetworkState(true));
+  window.addEventListener("offline", () => updateNetworkState(false));
+  window.addEventListener("touchstart", onTouchStart, { passive: true });
+  window.addEventListener("touchend", (event) => void onTouchEnd(event));
 }
 
 async function renderRoute(): Promise<void> {
@@ -135,6 +151,7 @@ async function renderRoute(): Promise<void> {
   state.previousRoute = state.route;
   state.route = route;
   state.suppressTransition = false;
+  rememberRoute(route);
 
   setActiveNavigation(route.tab);
   const view = $("#view");
@@ -143,6 +160,7 @@ async function renderRoute(): Promise<void> {
 
   view.innerHTML = renderPage(route, state);
   context.innerHTML = renderContext(route, state);
+  renderAppStatus();
   animateView(direction);
   (view as HTMLElement).focus({ preventScroll: true });
 }
@@ -175,6 +193,15 @@ function animateView(direction: "none" | "forward" | "back" | "tab"): void {
 }
 
 async function onClick(event: MouseEvent): Promise<void> {
+  const nav = (event.target as Element | null)?.closest<HTMLAnchorElement>("[data-tab]");
+  if (nav) {
+    const tab = nav.dataset.tab;
+    const destination = tab ? state.tabStacks[tab] || nav.getAttribute("href") || "#/today" : nav.getAttribute("href") || "#/today";
+    event.preventDefault();
+    navigateTo(destination);
+    return;
+  }
+
   const target = (event.target as Element | null)?.closest<HTMLElement>("[data-action]");
   if (!target) return;
 
@@ -304,6 +331,11 @@ async function onClick(event: MouseEvent): Promise<void> {
       toast("本机数据已清空");
       await renderRoute();
     }
+    return;
+  }
+
+  if (action === "reload-app") {
+    window.location.reload();
   }
 }
 
@@ -354,9 +386,57 @@ async function onKeydown(event: KeyboardEvent): Promise<void> {
   if (event.key === "ArrowRight") shiftSentence(lesson, 1);
 }
 
+function onTouchStart(event: TouchEvent): void {
+  const touch = event.touches[0];
+  if (!touch || touch.clientX > 28) {
+    state.touchStart = null;
+    return;
+  }
+  state.touchStart = { x: touch.clientX, y: touch.clientY };
+}
+
+async function onTouchEnd(event: TouchEvent): Promise<void> {
+  if (!state.touchStart) return;
+  const touch = event.changedTouches[0];
+  if (!touch) return;
+  const dx = touch.clientX - state.touchStart.x;
+  const dy = Math.abs(touch.clientY - state.touchStart.y);
+  state.touchStart = null;
+  if (dx > 72 && dy < 48) {
+    navigateBack();
+  }
+}
+
 function rerender(): void {
   state.suppressTransition = true;
   void renderRoute();
+}
+
+function navigateTo(hash: string): void {
+  if (location.hash === hash) {
+    rerender();
+    return;
+  }
+  location.hash = hash;
+}
+
+function navigateBack(): void {
+  const route = state.route || parseRoute(state.lastTab).route;
+  if (route.name === "dictation" && route.id) {
+    navigateTo(`#/train/${route.id}`);
+    return;
+  }
+  if (route.name === "train") {
+    navigateTo("#/library");
+  }
+}
+
+function rememberRoute(route: RouteState): void {
+  if (route.name === "train" || route.name === "dictation") {
+    state.tabStacks[route.tab] = `#${route.path}`;
+    return;
+  }
+  state.tabStacks[route.name] = `#${route.path}`;
 }
 
 function shiftSentence(lesson: Lesson, delta: number): void {
@@ -429,50 +509,46 @@ async function completeAttempt(lesson: Lesson): Promise<void> {
 
 async function checkDictation(lesson: Lesson): Promise<void> {
   const target = dictationTarget(lesson);
-  const correct = normalizeWords(target);
-  const input = normalizeWords(state.dictationText);
-  const words = correct.map((word, index) => ({ word, missed: input[index] !== word }));
-  const matched = words.filter((item) => !item.missed).length;
-  const score = correct.length ? Math.round((matched / correct.length) * 100) : 0;
-  state.dictationResult = { score, words };
+  const result = scoreDictation(target, state.dictationText);
+  state.dictationResult = result;
 
   await requireDb().add("attempts", {
     lessonId: lesson.id,
     mode: "听写",
     date: localDate(),
     durationSeconds: 300,
-    score,
+    score: result.score,
     createdAt: new Date().toISOString()
   });
 
-  if (score < 85) {
+  if (result.score < 85) {
     await requireDb().put("mistakes", {
       id: `${lesson.id}-dictation-${Date.now()}`,
       lessonId: lesson.id,
       sentenceId: `${lesson.id}-dictation`,
       type: "听写漏听",
-      note: `听写得分 ${score}%`,
+      note: `听写得分 ${result.score}%，漏词 ${result.missed}，多词 ${result.extra}`,
       text: target,
       date: localDate(),
       createdAt: new Date().toISOString()
     });
   }
 
-  toast(`听写 ${score}%`);
+  toast(`听写 ${result.score}%`);
 }
 
 async function reviewVocab(rating: Rating): Promise<void> {
   const cards = dueCards(state);
   if (!cards.length) return;
   const card = cards[Math.min(state.vocabIndex, cards.length - 1)];
-  const easeDelta = rating === "again" ? -1 : rating === "good" ? 1 : 0;
+  const review = nextReview(card, rating);
 
   await requireDb().put("vocabCards", {
     ...card,
-    ease: clamp(card.ease + easeDelta, 1, 7),
+    ease: review.ease,
     reviewCount: card.reviewCount + 1,
     lastRating: rating,
-    dueDate: nextDueDate(rating, card.ease)
+    dueDate: review.dueDate
   });
 
   state.vocabIndex = Math.min(state.vocabIndex + 1, cards.length - 1);
@@ -491,10 +567,40 @@ function toast(message: string): void {
 
 let toastTimer = 0;
 
+function updateNetworkState(online: boolean): void {
+  state.online = online;
+  renderAppStatus();
+  toast(online ? "已恢复在线" : "已离线，训练数据仍可本地使用");
+}
+
+function renderAppStatus(): void {
+  const stateLabel = $("#network-state");
+  if (stateLabel) {
+    stateLabel.textContent = state.online ? "在线" : "离线";
+    stateLabel.classList.toggle("offline", !state.online);
+  }
+  const update = $(".update-action") as HTMLButtonElement | null;
+  if (update) update.hidden = !state.updateReady;
+}
+
 function registerServiceWorker(): void {
   if (!("serviceWorker" in navigator)) return;
   const swUrl = `${import.meta.env.BASE_URL}service-worker.js`;
-  navigator.serviceWorker.register(swUrl).catch(() => {});
+  navigator.serviceWorker.register(swUrl)
+    .then((registration) => {
+      registration.addEventListener("updatefound", () => {
+        const worker = registration.installing;
+        if (!worker) return;
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "installed" && navigator.serviceWorker.controller) {
+            state.updateReady = true;
+            renderAppStatus();
+            toast("新版本已准备好");
+          }
+        });
+      });
+    })
+    .catch(() => {});
 }
 
 function requireDb(): ListeningDb {

@@ -1,10 +1,12 @@
 import { MISTAKE_TYPES, ROUTES } from "../core/config";
+import { buildDailyPlan, nextAdvice, recommendLesson } from "../core/learning";
 import { attr, clamp, formatDuration, html, icon } from "../core/utils";
 import type {
+  DailyPlanItem,
   DataSnapshot,
+  DictationResult,
   Lesson,
   LessonSentence,
-  Rating,
   RouteState,
   UserSettings,
   VocabCard
@@ -20,9 +22,11 @@ export interface ViewModel {
   loopByLesson: Record<string, boolean | undefined>;
   modeByLesson: Record<string, "精听" | "跟读" | undefined>;
   dictationText: string;
-  dictationResult: { score: number; words: { word: string; missed: boolean }[] } | null;
+  dictationResult: DictationResult | null;
   vocabIndex: number;
   vocabRevealed: boolean;
+  online: boolean;
+  updateReady: boolean;
 }
 
 export function renderShell(): string {
@@ -48,6 +52,10 @@ export function renderShell(): string {
           <span class="note-kicker">今日原则</span>
           <strong>先听懂，再看懂。</strong>
           <p>每轮只解决一个最明显的声音盲区。</p>
+        </section>
+        <section class="app-state" aria-live="polite">
+          <span id="network-state"></span>
+          <button class="text-link update-action" data-action="reload-app" hidden>更新</button>
         </section>
       </aside>
 
@@ -119,7 +127,7 @@ export function renderContext(route: RouteState, model: ViewModel): string {
     `;
   }
 
-  const lesson = route.id ? findLesson(model.lessons, route.id) ?? recommendedLesson(model) : recommendedLesson(model);
+  const lesson = route.id ? findLesson(model.lessons, route.id) ?? recommendLesson(model) : recommendLesson(model);
   return `
     <section class="context-card">
       <p class="kicker">Now</p>
@@ -139,12 +147,13 @@ export function renderContext(route: RouteState, model: ViewModel): string {
 }
 
 function renderToday(model: ViewModel): string {
-  const lesson = recommendedLesson(model);
+  const lesson = recommendLesson(model);
   const minutes = todayMinutes(model);
   const goal = model.settings.dailyGoalMinutes;
   const percent = clamp(Math.round((minutes / goal) * 100), 0, 100);
   const due = dueCards(model).length;
   const progress = progressMap(model);
+  const plan = buildDailyPlan(model);
 
   return `
     <div class="screen">
@@ -182,12 +191,24 @@ function renderToday(model: ViewModel): string {
         <div class="section-title">
           <div>
             <p class="kicker">Plan</p>
-            <h2>今日路径</h2>
+            <h2>今日 40 分钟计划</h2>
           </div>
           <a class="text-link" href="#/stats">看盲区</a>
         </div>
+        <div class="daily-plan">
+          ${plan.map(planItem).join("")}
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <p class="kicker">Materials</p>
+            <h2>候选材料</h2>
+          </div>
+        </div>
         <div class="plan-list">
-          ${model.lessons.slice(0, 3).map((item) => lessonRow(item, progress.get(item.id))).join("")}
+          ${model.lessons.slice(0, 2).map((item) => lessonRow(item, progress.get(item.id))).join("")}
         </div>
       </section>
     </div>
@@ -265,6 +286,14 @@ function renderTrain(lessonId: string | null, model: ViewModel): string {
         </div>
       </section>
 
+      <div class="mobile-control-bar" role="toolbar" aria-label="移动端播放器控制">
+        <button class="icon-btn" data-action="prev-sentence" aria-label="移动端上一句">${icon("prev")}</button>
+        <button class="play-btn" data-action="play-current">${icon("play")}播放</button>
+        <button class="icon-btn" data-action="next-sentence" aria-label="移动端下一句">${icon("next")}</button>
+        <button class="icon-btn ${reveal ? "active" : ""}" data-action="toggle-reveal" aria-label="移动端显示或隐藏原文">${icon("eye")}</button>
+        <button class="icon-btn ${loop ? "active" : ""}" data-action="toggle-loop" aria-label="移动端单句循环">${icon("repeat")}</button>
+      </div>
+
       <section class="content-grid">
         <div class="panel">
           <div class="section-title">
@@ -330,7 +359,7 @@ function renderDictation(lessonId: string | null, model: ViewModel): string {
       </header>
 
       <section class="panel">
-        <textarea class="dictation-input" data-role="dictation-input" placeholder="写下你听到的英文">${html(model.dictationText)}</textarea>
+        <textarea class="dictation-input" data-role="dictation-input" placeholder="写下你听到的英文" autocomplete="off" autocapitalize="off" spellcheck="false">${html(model.dictationText)}</textarea>
         <div class="action-row">
           <button class="btn primary" data-action="check-dictation">${icon("check")}对照原文</button>
           <button class="btn" data-action="clear-dictation">${icon("close")}清空</button>
@@ -416,7 +445,8 @@ function renderStats(model: ViewModel): string {
       <section class="panel">
         <p class="kicker">Advice</p>
         <h2>下轮建议</h2>
-        <p>${html(nextAdvice(distribution.items))}</p>
+        <p>${html(nextAdvice(model.snapshot))}</p>
+        ${distribution.items[0] ? `<a class="btn primary" href="#/train/${html(model.snapshot.mistakes.find((item) => item.type === distribution.items[0].type)?.lessonId || recommendLesson(model).id)}">${icon("play")}${html(distribution.items[0].type)} 专项训练</a>` : ""}
       </section>
     </div>
   `;
@@ -466,6 +496,16 @@ function metric(label: string, value: string, caption: string): string {
       <strong>${html(value)}</strong>
       <small>${html(caption)}</small>
     </article>
+  `;
+}
+
+function planItem(item: DailyPlanItem): string {
+  return `
+    <a class="plan-step" href="${item.href}">
+      <span>${item.minutes}</span>
+      <strong>${html(item.title)}</strong>
+      <small>${html(item.mode)} · ${html(item.reason)}</small>
+    </a>
   `;
 }
 
@@ -527,8 +567,9 @@ function dictationResult(model: ViewModel, target: string): string {
       <h2>${result.score}%</h2>
       <p>红色是漏听或错位。把这些词放回原句复听。</p>
       <div class="word-grid">
-        ${result.words.map((item) => `<span class="word ${item.missed ? "missed" : ""}">${html(item.word)}</span>`).join("")}
+        ${result.words.map((item) => `<span class="word ${item.status}">${html(item.word)}</span>`).join("")}
       </div>
+      <p class="hint">漏词 ${result.missed} · 多词 ${result.extra} · 近似 ${result.near}</p>
       <small>${html(target)}</small>
     </div>
   `;
@@ -593,17 +634,6 @@ function emptyScreen(kicker: string, title: string, caption: string, href: strin
   `;
 }
 
-export function recommendedLesson(model: ViewModel): Lesson {
-  const progress = progressMap(model);
-  const preferred = model.settings.preferredAccent;
-  const pool = model.lessons
-    .filter((lesson) => !progress.get(lesson.id)?.completed)
-    .filter((lesson) => preferred === "自动" || lesson.accent === preferred);
-  const lesson = pool[0] ?? model.lessons[0];
-  if (!lesson) throw new Error("课程数据为空");
-  return lesson;
-}
-
 export function findLesson(lessons: Lesson[], id: string): Lesson | undefined {
   return lessons.find((lesson) => lesson.id === id);
 }
@@ -661,22 +691,6 @@ export function mistakeDistribution(model: ViewModel): { total: number; items: {
       .map(([type, count]) => ({ type, count, percent: total ? Math.round((count / total) * 100) : 0 }))
       .sort((a, b) => b.count - a.count)
   };
-}
-
-export function nextAdvice(items: { type: string }[]): string {
-  if (!items.length) return "先完成一轮精听，并至少标记两个听错原因。";
-  const top = items[0].type;
-  if (top === "连读") return "下一轮选生活对话，重点重复动词短语和介词连接。";
-  if (top === "弱读") return "跟读时专门盯 to、of、and、would、have 这些功能词。";
-  if (top === "生词") return "先降低材料难度，把新词做成听音识义卡再回听原句。";
-  if (top === "口音") return "保持同一主题，轮换 US、UK、AU 口音各听一遍。";
-  if (top === "语速快") return "先 0.75x 精听，再 1x 复听，最后只听关键词复述。";
-  return "继续用同一材料重复三轮，每轮只解决一个最高频盲区。";
-}
-
-export function nextDueDate(rating: Rating, ease: number): string {
-  const nextDays = rating === "again" ? 0 : rating === "hard" ? 1 : Math.max(2, ease + 1);
-  return currentLocalDate(nextDays);
 }
 
 function streakDays(model: ViewModel): number {

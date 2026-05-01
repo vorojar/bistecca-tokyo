@@ -2,6 +2,8 @@ export type Accent = "US" | "UK" | "AU";
 export type LessonMode = "精听" | "跟读" | "听写" | "泛听";
 export type Rating = "again" | "hard" | "good";
 
+export type DictationWordStatus = "match" | "missed" | "extra" | "near";
+
 export interface LessonSentence {
   id: string;
   text: string;
@@ -114,4 +116,26 @@ export interface RouteState {
   path: string;
   tab: string;
   depth: number;
+}
+
+export interface DictationWordResult {
+  word: string;
+  status: DictationWordStatus;
+}
+
+export interface DictationResult {
+  score: number;
+  words: DictationWordResult[];
+  missed: number;
+  extra: number;
+  near: number;
+}
+
+export interface DailyPlanItem {
+  id: string;
+  title: string;
+  minutes: number;
+  mode: LessonMode | "复听" | "复习";
+  reason: string;
+  href: string;
 }
