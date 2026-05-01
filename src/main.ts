@@ -553,11 +553,18 @@ async function toggleCurrentPlayback(lesson: Lesson): Promise<void> {
   state.heardBySentence[sentence.id] = true;
   rerender();
 
-  await state.audio.playSentence(lesson, sentence, state.settings.defaultRate);
+  await Promise.all([
+    state.audio.playSentence(lesson, sentence, state.settings.defaultRate),
+    minimumPlaybackFeedback()
+  ]);
   if (state.activePlayback?.lessonId === lesson.id && state.activePlayback.sentenceId === sentence.id) {
     state.activePlayback = null;
     rerender();
   }
+}
+
+function minimumPlaybackFeedback(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 900));
 }
 
 async function saveSetting<K extends keyof UserSettings>(key: K, value: UserSettings[K]): Promise<void> {
