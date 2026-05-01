@@ -2,21 +2,24 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 
 async function dismissOnboarding(page: Page): Promise<void> {
-  const dialog = page.getByRole("dialog", { name: "先定一个听力目标" });
-  if (await dialog.isVisible().catch(() => false)) {
-    await page.getByRole("button", { name: "稍后再说" }).click();
-    await expect(dialog).toBeHidden();
+  const layer = page.locator("#modal-root .onboarding-layer");
+  await layer.first().waitFor({ state: "visible", timeout: 5_000 }).catch(() => undefined);
+  if ((await layer.count()) > 0) {
+    await page.locator('#modal-root [data-action="dismiss-goal"]').click({ force: true });
+    await expect(layer).toHaveCount(0, { timeout: 10_000 });
   }
 }
 
 async function completeOnboarding(page: Page): Promise<void> {
+  const layer = page.locator("#modal-root .onboarding-layer");
+  await expect(layer).toBeVisible();
   await expect(page.getByRole("dialog", { name: "先定一个听力目标" })).toBeVisible();
   await page.getByRole("button", { name: /刚打基础/ }).click();
   await page.getByRole("button", { name: /工作会议听懂/ }).click();
   await page.getByRole("button", { name: /^30\s*分钟$/ }).click();
   await page.locator('[data-setting="targetHorizonDays"][data-value="90"]').click();
   await page.getByRole("button", { name: /生成今日训练/ }).click();
-  await expect(page.getByRole("dialog", { name: "先定一个听力目标" })).toBeHidden();
+  await expect(layer).toHaveCount(0, { timeout: 10_000 });
 }
 
 test("刷新直达页面时不闪出启动文案", async ({ page }) => {

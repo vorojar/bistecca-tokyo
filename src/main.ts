@@ -135,6 +135,7 @@ async function refreshData(): Promise<void> {
 
 function bindEvents(): void {
   window.addEventListener("hashchange", () => void renderRoute());
+  document.addEventListener("pointerdown", onPointerDown, { capture: true });
   document.addEventListener("click", (event) => void onClick(event));
   document.addEventListener("input", onInput);
   document.addEventListener("change", (event) => void onChange(event));
@@ -143,6 +144,11 @@ function bindEvents(): void {
   window.addEventListener("offline", () => updateNetworkState(false));
   window.addEventListener("touchstart", onTouchStart, { passive: true });
   window.addEventListener("touchend", (event) => void onTouchEnd(event));
+}
+
+function onPointerDown(event: PointerEvent): void {
+  const nav = (event.target as Element | null)?.closest("[data-tab]");
+  if (nav) captureScrollPosition(state.route);
 }
 
 async function renderRoute(): Promise<void> {
@@ -205,6 +211,7 @@ async function onClick(event: MouseEvent): Promise<void> {
     const tab = nav.dataset.tab;
     const destination = tab ? state.tabStacks[tab] || nav.getAttribute("href") || "#/today" : nav.getAttribute("href") || "#/today";
     event.preventDefault();
+    saveScrollPosition(state.route);
     navigateTo(destination);
     return;
   }
@@ -476,9 +483,17 @@ function routeScrollKey(route: RouteState): string {
   return route.path;
 }
 
-function saveScrollPosition(route: RouteState | null): void {
+function captureScrollPosition(route: RouteState | null): void {
   if (!route) return;
   state.scrollPositions[routeScrollKey(route)] = window.scrollY;
+}
+
+function saveScrollPosition(route: RouteState | null): void {
+  if (!route) return;
+  const key = routeScrollKey(route);
+  const currentTop = window.scrollY;
+  const savedTop = state.scrollPositions[key] ?? 0;
+  state.scrollPositions[key] = currentTop === 0 && savedTop > 0 ? savedTop : currentTop;
 }
 
 function restoreScrollPosition(route: RouteState): void {
