@@ -135,7 +135,10 @@ async function refreshData(): Promise<void> {
 
 function bindEvents(): void {
   window.addEventListener("hashchange", () => void renderRoute());
-  document.addEventListener("pointerdown", onPointerDown, { capture: true });
+  window.addEventListener("scroll", onScroll, { passive: true });
+  document.addEventListener("pointerdown", onNavigationPressStart, { capture: true });
+  document.addEventListener("mousedown", onNavigationPressStart, { capture: true });
+  document.addEventListener("touchstart", onNavigationPressStart, { capture: true, passive: true });
   document.addEventListener("click", (event) => void onClick(event));
   document.addEventListener("input", onInput);
   document.addEventListener("change", (event) => void onChange(event));
@@ -146,9 +149,19 @@ function bindEvents(): void {
   window.addEventListener("touchend", (event) => void onTouchEnd(event));
 }
 
-function onPointerDown(event: PointerEvent): void {
+function onNavigationPressStart(event: Event): void {
   const nav = (event.target as Element | null)?.closest("[data-tab]");
   if (nav) captureScrollPosition(state.route);
+}
+
+function onScroll(): void {
+  if (!state.route) return;
+  const key = routeScrollKey(state.route);
+  const currentTop = window.scrollY;
+  const savedTop = state.scrollPositions[key] ?? 0;
+  if (currentTop > 0 || savedTop === 0) {
+    state.scrollPositions[key] = currentTop;
+  }
 }
 
 async function renderRoute(): Promise<void> {
