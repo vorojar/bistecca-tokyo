@@ -1,38 +1,48 @@
-export class AudioEngine {
-  constructor() {
-    this.currentAudio = null;
-  }
+import { ACCENT_LANG } from "./config";
+import type { Accent, Lesson, LessonSentence } from "../types/domain";
 
-  async playSentence(lesson, sentence, rate = 1) {
+export class AudioEngine {
+  private currentAudio: HTMLAudioElement | null = null;
+
+  async playSentence(lesson: Lesson, sentence: LessonSentence, rate: number): Promise<void> {
     if (sentence.audioUrl) {
       await this.playFile(sentence.audioUrl, rate, sentence.audioStart, sentence.audioEnd);
       return;
     }
-
     await this.speak(sentence.text, lesson.accent, rate);
   }
 
-  async playText(text, accent = "US", rate = 1) {
+  async playText(text: string, accent: Accent = "US", rate = 1): Promise<void> {
     await this.speak(text, accent, rate);
   }
 
-  playFile(url, rate, start, end) {
+  stop(): void {
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio = null;
+    }
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+  }
+
+  private playFile(url: string, rate: number, start?: number, end?: number): Promise<void> {
     return new Promise((resolve) => {
       this.stop();
       const audio = new Audio(url);
       this.currentAudio = audio;
-      audio.playbackRate = Number(rate) || 1;
-      if (Number.isFinite(start)) audio.currentTime = start;
+      audio.playbackRate = rate || 1;
+      if (Number.isFinite(start)) audio.currentTime = Number(start);
 
-      const cleanup = () => {
+      const cleanup = (): void => {
         audio.removeEventListener("ended", cleanup);
         audio.removeEventListener("error", cleanup);
         audio.removeEventListener("timeupdate", stopAtEnd);
         resolve();
       };
 
-      const stopAtEnd = () => {
-        if (Number.isFinite(end) && audio.currentTime >= end) {
+      const stopAtEnd = (): void => {
+        if (Number.isFinite(end) && audio.currentTime >= Number(end)) {
           audio.pause();
           cleanup();
         }
@@ -45,7 +55,7 @@ export class AudioEngine {
     });
   }
 
-  speak(text, accent, rate = 1) {
+  private speak(text: string, accent: Accent, rate: number): Promise<void> {
     return new Promise((resolve) => {
       if (!("speechSynthesis" in window)) {
         resolve();
@@ -54,39 +64,21 @@ export class AudioEngine {
 
       this.stop();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = accentToLang(accent);
-      utterance.rate = Number(rate) || 1;
+      utterance.lang = ACCENT_LANG[accent];
+      utterance.rate = rate || 1;
       utterance.pitch = 1;
-
       const voice = pickVoice(utterance.lang);
       if (voice) utterance.voice = voice;
-
-      utterance.onend = resolve;
-      utterance.onerror = resolve;
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
       window.speechSynthesis.speak(utterance);
     });
   }
-
-  stop() {
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio = null;
-    }
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-  }
 }
 
-function pickVoice(lang) {
+function pickVoice(lang: string): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
   return voices.find((voice) => voice.lang === lang)
     || voices.find((voice) => voice.lang.startsWith(lang.split("-")[0]))
     || null;
-}
-
-function accentToLang(accent) {
-  if (accent === "UK") return "en-GB";
-  if (accent === "AU") return "en-AU";
-  return "en-US";
 }

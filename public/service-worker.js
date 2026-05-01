@@ -1,16 +1,11 @@
-const CACHE_NAME = "auralift-static-v2";
+const CACHE_NAME = "auralift-static-v3";
+const BASE = "/bistecca-tokyo/";
 const ASSETS = [
-  "./",
-  "./index.html",
-  "./manifest.webmanifest",
-  "./styles/app.css",
-  "./scripts/app.js",
-  "./scripts/audio.js",
-  "./scripts/config.js",
-  "./scripts/db.js",
-  "./scripts/utils.js",
-  "./data/lessons.json",
-  "./assets/icon.svg"
+  BASE,
+  `${BASE}index.html`,
+  `${BASE}manifest.webmanifest`,
+  `${BASE}data/lessons.json`,
+  `${BASE}assets/icon.svg`
 ];
 
 self.addEventListener("install", (event) => {

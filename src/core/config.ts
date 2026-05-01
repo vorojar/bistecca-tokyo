@@ -1,9 +1,12 @@
+import type { Accent, UserSettings } from "../types/domain";
+
 export const DB_NAME = "auralift-listening-v1";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
-export const STORES = ["progress", "attempts", "mistakes", "vocabCards", "settings"];
+export const STORE_NAMES = ["progress", "attempts", "mistakes", "vocabCards", "settings"] as const;
+export type StoreName = typeof STORE_NAMES[number];
 
-export const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS: UserSettings = {
   key: "user",
   dailyGoalMinutes: 45,
   defaultRate: 1,
@@ -12,7 +15,7 @@ export const DEFAULT_SETTINGS = {
   reduceMotion: false
 };
 
-export const MISTAKE_TYPES = ["连读", "弱读", "生词", "口音", "语速快", "熟词听不出"];
+export const MISTAKE_TYPES = ["连读", "弱读", "生词", "口音", "语速快", "熟词听不出"] as const;
 
 export const ROUTES = [
   { id: "today", label: "今日", icon: "today", href: "#/today" },
@@ -20,7 +23,13 @@ export const ROUTES = [
   { id: "vocab", label: "词汇", icon: "cards", href: "#/vocab" },
   { id: "stats", label: "统计", icon: "chart", href: "#/stats" },
   { id: "settings", label: "设置", icon: "settings", href: "#/settings" }
-];
+] as const;
+
+export const ACCENT_LANG: Record<Accent, string> = {
+  US: "en-US",
+  UK: "en-GB",
+  AU: "en-AU"
+};
 
 export const ICON_PATHS = {
   today: "M8 2v3M16 2v3M3.5 9h17M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z",
@@ -41,4 +50,6 @@ export const ICON_PATHS = {
   upload: "M12 21V9M7 14l5-5 5 5M4 3h16",
   trash: "M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3",
   close: "M6 6l12 12M18 6 6 18"
-};
+} as const;
+
+export type IconName = keyof typeof ICON_PATHS;
