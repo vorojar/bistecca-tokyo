@@ -1,12 +1,23 @@
 import { MISTAKE_TYPES, ROUTES } from "../core/config";
-import { buildDailyPlan, nextAdvice, recommendLesson } from "../core/learning";
+import {
+  buildDailyPlan,
+  buildGoalRoadmap,
+  LEARNER_LEVEL_OPTIONS,
+  nextAdvice,
+  recommendLesson,
+  TARGET_HORIZON_OPTIONS,
+  GOAL_PROFILES
+} from "../core/learning";
 import { attr, clamp, formatDuration, html, icon } from "../core/utils";
 import type {
   DailyPlanItem,
   DataSnapshot,
   DictationResult,
+  GoalOption,
+  GoalRoadmap,
   Lesson,
   LessonSentence,
+  ListeningGoal,
   RouteState,
   UserSettings,
   VocabCard
@@ -102,6 +113,22 @@ export function renderPage(route: RouteState, model: ViewModel): string {
 }
 
 export function renderContext(route: RouteState, model: ViewModel): string {
+  if (route.name === "today") {
+    const roadmap = buildGoalRoadmap(model);
+    return `
+      <section class="context-card">
+        <p class="kicker">Goal</p>
+        <h3>${html(roadmap.profile.title)}</h3>
+        <p>${html(roadmap.profile.evidence)}</p>
+      </section>
+      <section class="context-card">
+        <p class="kicker">Next</p>
+        <h3>${html(roadmap.nextMilestone.title)}</h3>
+        <p>${html(roadmap.nextMilestone.outcome)}</p>
+      </section>
+    `;
+  }
+
   if (route.name === "settings") {
     return `
       <section class="context-card">
@@ -154,16 +181,47 @@ function renderToday(model: ViewModel): string {
   const due = dueCards(model).length;
   const progress = progressMap(model);
   const plan = buildDailyPlan(model);
+  const roadmap = buildGoalRoadmap(model);
 
   return `
     <div class="screen">
-      <header class="screen-head">
-        <div>
-          <p class="kicker">Today</p>
-          <h1>今天练 ${Math.max(goal - minutes, 0)} 分钟就够了</h1>
-          <p>完成一轮精听、一次跟读、几张听力词汇卡。少而稳定，比刷材料更有效。</p>
+      <section class="goal-hero">
+        <div class="goal-copy">
+          <p class="kicker">Listening Roadmap</p>
+          <h1>${html(roadmap.profile.promise)}</h1>
+          <p>${html(roadmap.profile.audience)}</p>
+          <div class="goal-proof-grid">
+            ${goalMetric(`${roadmap.horizonDays} 天`, roadmap.targetDateLabel, "目标日期")}
+            ${goalMetric(`${goal} 分钟`, "每天", "稳定投入")}
+            ${goalMetric(`${roadmap.progressPercent}%`, roadmap.phaseName, "当前进度")}
+          </div>
+          <div class="action-row">
+            <a class="btn primary" href="#/train/${lesson.id}">${icon("play")}开始今天</a>
+            <a class="btn" href="#/settings">调整目标</a>
+          </div>
         </div>
-      </header>
+        <div class="goal-progress-card">
+          <p class="kicker">Next Milestone</p>
+          <h2>${html(roadmap.nextMilestone.title)}</h2>
+          <p>${html(roadmap.nextMilestone.outcome)}</p>
+          <div class="progress" style="--progress:${roadmap.progressPercent}%"><span></span></div>
+          <small>${html(roadmap.weeklyProof)}</small>
+        </div>
+      </section>
+
+      ${goalSetupCard(model, roadmap)}
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <p class="kicker">Milestones</p>
+            <h2>你会逐步拿到什么结果</h2>
+          </div>
+        </div>
+        <div class="milestone-list">
+          ${roadmap.milestones.map((item) => milestoneItem(item.day, item.title, item.outcome, item.evidence)).join("")}
+        </div>
+      </section>
 
       <section class="hero-card">
         <div class="hero-copy">
@@ -415,6 +473,7 @@ function renderStats(model: ViewModel): string {
   const mistakes = model.snapshot.mistakes;
   const minutes = Math.round(attempts.reduce((sum, item) => sum + (item.durationSeconds || 0), 0) / 60);
   const distribution = mistakeDistribution(model);
+  const roadmap = buildGoalRoadmap(model);
 
   return `
     <div class="screen">
@@ -430,6 +489,21 @@ function renderStats(model: ViewModel): string {
         ${metric("累计", `${minutes} 分钟`, "训练时长")}
         ${metric("轮次", `${attempts.length} 次`, "精听/跟读/听写")}
         ${metric("盲区", `${mistakes.length} 个`, "已标记问题")}
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <p class="kicker">Roadmap</p>
+            <h2>${html(roadmap.phaseName)}</h2>
+          </div>
+          <strong>${roadmap.progressPercent}%</strong>
+        </div>
+        <p>${html(roadmap.phaseDescription)}</p>
+        <div class="progress large" style="--progress:${roadmap.progressPercent}%"><span></span></div>
+        <div class="milestone-list compact">
+          ${roadmap.milestones.map((item) => milestoneItem(item.day, item.title, item.outcome, item.evidence)).join("")}
+        </div>
       </section>
 
       <section class="panel">
@@ -458,12 +532,15 @@ function renderSettings(model: ViewModel): string {
       <header class="screen-head">
         <div>
           <p class="kicker">Settings</p>
-          <h1>本地训练数据</h1>
-          <p>个人数据只保存在当前浏览器。正式上线必须让用户能导出、导入和清空。</p>
+          <h1>目标和本地训练数据</h1>
+          <p>目标决定素材难度、每日计划和统计口径。个人数据只保存在当前浏览器。</p>
         </div>
       </header>
 
       <section class="panel settings-list">
+        ${settingChoice("learnerLevel", "当前状态", "用来决定材料可懂度和第一阶段节奏。", model.settings.learnerLevel, LEARNER_LEVEL_OPTIONS)}
+        ${settingChoice("listeningGoal", "训练目标", "首页路线和素材推荐会围绕这个目标组织。", model.settings.listeningGoal, goalOptions())}
+        ${settingChoice("targetHorizonDays", "目标周期", "周期越长，路线会覆盖更多真实语速迁移。", model.settings.targetHorizonDays, TARGET_HORIZON_OPTIONS)}
         ${settingNumber("dailyGoalMinutes", "每日目标", "建议 30-60 分钟，稳定优先。", model.settings.dailyGoalMinutes)}
         ${settingSelect("defaultRate", "默认语速", "精听可以降速，复听要回到正常语速。", model.settings.defaultRate, [0.75, 0.9, 1, 1.15, 1.25], "x")}
         ${settingSelect("preferredAccent", "偏好口音", "自动会按材料等级推荐。", model.settings.preferredAccent, ["自动", "US", "UK", "AU"], "")}
@@ -495,6 +572,62 @@ function metric(label: string, value: string, caption: string): string {
       <span>${html(label)}</span>
       <strong>${html(value)}</strong>
       <small>${html(caption)}</small>
+    </article>
+  `;
+}
+
+function goalMetric(label: string, value: string, caption: string): string {
+  return `
+    <article class="goal-metric">
+      <strong>${html(label)}</strong>
+      <span>${html(value)}</span>
+      <small>${html(caption)}</small>
+    </article>
+  `;
+}
+
+function goalSetupCard(model: ViewModel, roadmap: GoalRoadmap): string {
+  if (model.settings.onboardingComplete) {
+    return `
+      <section class="goal-contract">
+        <span>${html(roadmap.levelLabel)}</span>
+        <strong>${html(roadmap.profile.title)}</strong>
+        <small>每天 ${model.settings.dailyGoalMinutes} 分钟，到 ${html(roadmap.targetDateLabel)} 验收：${html(roadmap.nextMilestone.outcome)}</small>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="panel goal-setup">
+      <div class="section-title">
+        <div>
+          <p class="kicker">Start</p>
+          <h2>先定目标，再开始训练</h2>
+          <p>路线会按你的状态、目标和可投入时间生成，后续统计只看离目标还有多远。</p>
+        </div>
+      </div>
+      <div class="goal-field-grid">
+        ${compactChoice("learnerLevel", "当前状态", model.settings.learnerLevel, LEARNER_LEVEL_OPTIONS)}
+        ${compactChoice("listeningGoal", "训练目标", model.settings.listeningGoal, goalOptions())}
+        ${compactChoice("targetHorizonDays", "目标周期", model.settings.targetHorizonDays, TARGET_HORIZON_OPTIONS)}
+      </div>
+      <div class="action-row">
+        <button class="btn primary" data-action="confirm-goal">${icon("check")}确认我的路线</button>
+        <a class="btn" href="#/settings">更多设置</a>
+      </div>
+    </section>
+  `;
+}
+
+function milestoneItem(day: number, title: string, outcome: string, evidence: string): string {
+  return `
+    <article class="milestone-item">
+      <span>${day} 天</span>
+      <div>
+        <strong>${html(title)}</strong>
+        <p>${html(outcome)}</p>
+        <small>${html(evidence)}</small>
+      </div>
     </article>
   `;
 }
@@ -607,6 +740,36 @@ function settingSelect(key: string, title: string, caption: string, value: strin
       </select>
     </label>
   `;
+}
+
+function settingChoice<T extends string | number>(key: string, title: string, caption: string, value: T, options: GoalOption<T>[]): string {
+  return `
+    <label class="setting-row">
+      <span><strong>${html(title)}</strong><small>${html(caption)}</small></span>
+      <select class="field" data-setting="${key}">
+        ${options.map((option) => `<option value="${attr(option.value)}" ${option.value === value ? "selected" : ""}>${html(option.label)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function compactChoice<T extends string | number>(key: string, title: string, value: T, options: GoalOption<T>[]): string {
+  return `
+    <label class="compact-choice">
+      <span>${html(title)}</span>
+      <select class="field" data-setting="${key}">
+        ${options.map((option) => `<option value="${attr(option.value)}" ${option.value === value ? "selected" : ""}>${html(option.label)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function goalOptions(): GoalOption<ListeningGoal>[] {
+  return Object.values(GOAL_PROFILES).map((item) => ({
+    value: item.id,
+    label: item.title,
+    caption: item.promise
+  }));
 }
 
 function settingToggle(key: string, title: string, caption: string, checked: boolean): string {

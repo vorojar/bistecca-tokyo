@@ -12,7 +12,12 @@ export const DEFAULT_SETTINGS: UserSettings = {
   defaultRate: 1,
   showTranscriptFirst: false,
   preferredAccent: "自动",
-  reduceMotion: false
+  reduceMotion: false,
+  learnerLevel: "reader",
+  listeningGoal: "daily",
+  targetHorizonDays: 180,
+  onboardingComplete: false,
+  startedAt: ""
 };
 
 export const MISTAKE_TYPES = ["连读", "弱读", "生词", "口音", "语速快", "熟词听不出"] as const;

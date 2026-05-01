@@ -356,6 +356,164 @@ h3 {
   overflow: hidden;
 }
 
+.goal-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 26px;
+  align-items: stretch;
+  padding: 30px;
+  border: 1px solid #d6e3dc;
+  border-radius: var(--radius);
+  background: #eef5f1;
+}
+
+.goal-copy {
+  min-width: 0;
+}
+
+.goal-copy h1 {
+  max-width: 860px;
+}
+
+.goal-proof-grid,
+.goal-field-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.goal-proof-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 20px;
+}
+
+.goal-metric {
+  min-width: 0;
+  padding: 0 12px 0 0;
+  border-right: 1px solid #cfe0d6;
+}
+
+.goal-metric:last-child {
+  border-right: 0;
+}
+
+.goal-metric strong,
+.goal-metric span,
+.goal-metric small {
+  display: block;
+}
+
+.goal-metric strong {
+  font-size: 18px;
+}
+
+.goal-metric span,
+.goal-metric small,
+.goal-progress-card small {
+  color: var(--muted);
+}
+
+.goal-progress-card {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding-left: 24px;
+  border-left: 1px solid #cfe0d6;
+}
+
+.goal-progress-card h2 {
+  margin-bottom: 0;
+}
+
+.goal-progress-card p {
+  margin-bottom: 2px;
+  color: var(--muted);
+}
+
+.goal-setup .section-title {
+  margin-bottom: 16px;
+}
+
+.goal-field-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.compact-choice {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.compact-choice span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.goal-contract {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+.goal-contract span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.goal-contract small {
+  flex-basis: 100%;
+  color: var(--muted);
+}
+
+.milestone-list {
+  display: grid;
+  gap: 10px;
+}
+
+.milestone-list.compact {
+  margin-top: 14px;
+}
+
+.milestone-item {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.milestone-item:last-child {
+  border-bottom: 0;
+}
+
+.milestone-item > span {
+  width: 52px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--green);
+  background: var(--green-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.milestone-item p {
+  margin: 2px 0;
+}
+
+.milestone-item small {
+  color: var(--muted);
+}
+
 .hero-copy {
   min-width: 0;
   max-width: 680px;
@@ -645,6 +803,11 @@ h3 {
   height: 100%;
   border-radius: inherit;
   background: var(--green);
+}
+
+.progress.large {
+  height: 10px;
+  margin: 14px 0 0;
 }
 
 .player-card {
@@ -1144,6 +1307,9 @@ h3 {
 @media (max-width: 720px) {
   .screen-head,
   .screen-head.split,
+  .goal-hero,
+  .goal-proof-grid,
+  .goal-field-grid,
   .hero-card,
   .lesson-card,
   .content-grid,
@@ -1161,6 +1327,31 @@ h3 {
   .hero-card {
     min-height: 0;
     padding: 20px;
+  }
+
+  .goal-hero {
+    padding: 20px;
+  }
+
+  .goal-progress-card {
+    padding-left: 0;
+    padding-top: 16px;
+    border-left: 0;
+    border-top: 1px solid #cfe0d6;
+  }
+
+  .goal-metric {
+    padding: 0 0 10px;
+    border-right: 0;
+    border-bottom: 1px solid #cfe0d6;
+  }
+
+  .goal-metric:last-child {
+    border-bottom: 0;
+  }
+
+  .milestone-item {
+    grid-template-columns: 1fr;
   }
 
   .daily-ring {

@@ -1,6 +1,6 @@
 import "./styles/app.css";
 import { AudioEngine } from "./core/audio";
-import { MISTAKE_TYPES } from "./core/config";
+import { DEFAULT_SETTINGS, MISTAKE_TYPES } from "./core/config";
 import { openListeningDb, type ListeningDb } from "./core/db";
 import { nextReview, scoreDictation } from "./core/learning";
 import { parseRoute, transitionDirection } from "./core/router";
@@ -41,14 +41,7 @@ const state: AppState = {
   lessons: [],
   db: null,
   audio: new AudioEngine(),
-  settings: {
-    key: "user",
-    dailyGoalMinutes: 45,
-    defaultRate: 1,
-    showTranscriptFirst: false,
-    preferredAccent: "自动",
-    reduceMotion: false
-  },
+  settings: { ...DEFAULT_SETTINGS },
   snapshot: {
     progress: [],
     attempts: [],
@@ -274,6 +267,12 @@ async function onClick(event: MouseEvent): Promise<void> {
     return;
   }
 
+  if (action === "confirm-goal") {
+    await confirmGoal();
+    rerender();
+    return;
+  }
+
   if (action === "play-dictation" && lesson) {
     await state.audio.playText(dictationTarget(lesson), lesson.accent, state.settings.defaultRate);
     return;
@@ -367,7 +366,7 @@ async function onChange(event: Event): Promise<void> {
   if (!key) return;
 
   let value: unknown = target instanceof HTMLInputElement && target.type === "checkbox" ? target.checked : target.value;
-  if (key === "dailyGoalMinutes" || key === "defaultRate") value = Number(value);
+  if (key === "dailyGoalMinutes" || key === "defaultRate" || key === "targetHorizonDays") value = Number(value);
   await saveSetting(key, value as never);
   toast("设置已保存");
   rerender();
@@ -458,6 +457,16 @@ async function playCurrent(lesson: Lesson): Promise<void> {
 async function saveSetting<K extends keyof UserSettings>(key: K, value: UserSettings[K]): Promise<void> {
   state.settings = { ...state.settings, [key]: value };
   await requireDb().saveSettings(state.settings);
+}
+
+async function confirmGoal(): Promise<void> {
+  state.settings = {
+    ...state.settings,
+    onboardingComplete: true,
+    startedAt: state.settings.startedAt || localDate()
+  };
+  await requireDb().saveSettings(state.settings);
+  toast("路线已生成");
 }
 
 async function toggleMistake(lesson: Lesson, type: string): Promise<void> {

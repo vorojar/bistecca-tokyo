@@ -1,6 +1,9 @@
 export type Accent = "US" | "UK" | "AU";
 export type LessonMode = "精听" | "跟读" | "听写" | "泛听";
 export type Rating = "again" | "hard" | "good";
+export type LearnerLevel = "foundation" | "reader" | "realworld";
+export type ListeningGoal = "daily" | "shows" | "work" | "podcast";
+export type TargetHorizonDays = 30 | 90 | 180;
 
 export type DictationWordStatus = "match" | "missed" | "extra" | "near";
 
@@ -48,6 +51,11 @@ export interface UserSettings {
   showTranscriptFirst: boolean;
   preferredAccent: "自动" | Accent;
   reduceMotion: boolean;
+  learnerLevel: LearnerLevel;
+  listeningGoal: ListeningGoal;
+  targetHorizonDays: TargetHorizonDays;
+  onboardingComplete: boolean;
+  startedAt: string;
 }
 
 export interface ProgressRecord {
@@ -138,4 +146,43 @@ export interface DailyPlanItem {
   mode: LessonMode | "复听" | "复习";
   reason: string;
   href: string;
+}
+
+export interface GoalOption<T extends string | number> {
+  value: T;
+  label: string;
+  caption: string;
+}
+
+export interface GoalMilestone {
+  day: number;
+  title: string;
+  outcome: string;
+  evidence: string;
+}
+
+export interface GoalProfile {
+  id: ListeningGoal;
+  title: string;
+  promise: string;
+  audience: string;
+  evidence: string;
+  topicHints: string[];
+  milestones: GoalMilestone[];
+}
+
+export interface GoalRoadmap {
+  profile: GoalProfile;
+  levelLabel: string;
+  horizonDays: TargetHorizonDays;
+  targetDateLabel: string;
+  targetMinutes: number;
+  completedMinutes: number;
+  activeDays: number;
+  progressPercent: number;
+  phaseName: string;
+  phaseDescription: string;
+  nextMilestone: GoalMilestone;
+  milestones: GoalMilestone[];
+  weeklyProof: string;
 }
