@@ -33,6 +33,7 @@ interface AppState extends ViewModel {
   previousRoute: RouteState | null;
   lastTab: string;
   tabStacks: Record<string, string>;
+  scrollPositions: Record<string, number>;
   touchStart: { x: number; y: number } | null;
   suppressTransition: boolean;
 }
@@ -58,6 +59,7 @@ const state: AppState = {
     stats: "#/stats",
     settings: "#/settings"
   },
+  scrollPositions: {},
   touchStart: null,
   libraryFilter: "全部",
   sentenceIndex: {},
@@ -92,6 +94,7 @@ async function init(): Promise<void> {
     app.innerHTML = renderShell();
     finishBoot();
     bindEvents();
+    enableManualScrollRestoration();
     registerServiceWorker();
 
     if (!location.hash) {
@@ -142,6 +145,7 @@ function bindEvents(): void {
 }
 
 async function renderRoute(): Promise<void> {
+  saveScrollPosition(state.route);
   await refreshData();
   const parsed = parseRoute(state.lastTab);
   const route = parsed.route;
@@ -162,6 +166,7 @@ async function renderRoute(): Promise<void> {
   renderAppStatus();
   animateView(direction);
   (view as HTMLElement).focus({ preventScroll: true });
+  restoreScrollPosition(route);
 }
 
 function setActiveNavigation(tab: string): void {
@@ -442,6 +447,26 @@ function rememberRoute(route: RouteState): void {
     return;
   }
   state.tabStacks[route.name] = `#${route.path}`;
+}
+
+function enableManualScrollRestoration(): void {
+  if ("scrollRestoration" in history) {
+    history.scrollRestoration = "manual";
+  }
+}
+
+function routeScrollKey(route: RouteState): string {
+  return route.path;
+}
+
+function saveScrollPosition(route: RouteState | null): void {
+  if (!route) return;
+  state.scrollPositions[routeScrollKey(route)] = window.scrollY;
+}
+
+function restoreScrollPosition(route: RouteState): void {
+  const top = state.scrollPositions[routeScrollKey(route)] ?? 0;
+  requestAnimationFrame(() => window.scrollTo(0, top));
 }
 
 function shiftSentence(lesson: Lesson, delta: number): void {

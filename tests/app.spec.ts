@@ -33,6 +33,22 @@ test("今日训练首页可用且无严重可访问性问题", async ({ page }) 
   expect(accessibilityScanResults.violations).toEqual([]);
 });
 
+test("切换 tab 时滚动位置互不污染", async ({ page }) => {
+  await page.goto("#/today");
+  await expect(page.getByRole("heading", { name: /看得懂/ })).toBeVisible();
+
+  await page.evaluate(() => window.scrollTo(0, 560));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
+
+  await page.locator('[data-tab="library"]:visible').click();
+  await expect(page.getByRole("heading", { name: "选一段听得懂的材料" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(30);
+
+  await page.locator('[data-tab="today"]:visible').click();
+  await expect(page.getByRole("heading", { name: /看得懂/ })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
+});
+
 test("核心训练流程可完成一轮并进入统计", async ({ page }) => {
   await page.goto("#/train/coffee-chat-b1");
   await expect(page.locator("h1", { hasText: "A Short Coffee Chat" })).toBeVisible();
